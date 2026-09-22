@@ -16,23 +16,36 @@ kein Build-Schritt, keine externen 3D-Modelle, alles aus Primitives (Box/Plane/Z
 | Maus | Umsehen (Pointer Lock) |
 | Leertaste | Springen |
 | Shift | Sprinten |
+| Strg / C | Slide (im Sprint) — + Sprung = **Slide-Jump** für Extra-Speed |
 | Linksklick | Schießen (halten für Automatikfeuer) |
+| Rechtsklick | Waffen-Fähigkeit: Gewehr = Zielen (ADS), Pistole = Fächerschuss, Messer = Heavy-Backstab |
 | 1 – 4 / Mausrad | Waffe wechseln (Sturmgewehr, Pistole, Messer, Wurfladung) |
 | R | Nachladen |
-| F | Nahkampf |
+| F | Nahkampf (Quick-Melee, unabhängig vom Slot) |
 | G | Utility (Wurfladung) |
 
 ## Spielprinzip
 
 - **Waffen:** Sturmgewehr und Pistole mit Magazin, Nachladen, Streuung, Rückstoß, Distanz-Schadensfalloff
-  und Kopfschuss-Multiplikator. Dazu ein Nahkampfmesser (Cooldown, einmaliger Treffer) und eine Wurfladung
-  mit Flugbahn, Explosionsradius und Schaden an Spieler *und* Bots (auch Eigenschaden).
+  und Kopfschuss-Multiplikator (1,25× — wie im echten Rivals). Jede Waffe hat einen eigenen Move-Speed-Modifier
+  (Gewehr -10 %, Pistole -5 %, Messer +10 %). Dazu ein Nahkampfmesser (Cooldown, einmaliger Treffer) und eine
+  Wurfladung mit Flugbahn, Explosionsradius und Schaden an Spieler *und* Bots (auch Eigenschaden).
+- **Rechtsklick-Fähigkeiten statt klassischem ADS überall:** Das Sturmgewehr zielt (reduzierte Streuung,
+  Kamera-Zoom, weitere Verlangsamung). Die Pistole feuert einen Fächerschuss (3 schnelle Schüsse, kurzer
+  Cooldown). Das Messer schlägt einen Heavy-Angriff mit größerer Reichweite — trifft er den Rücken eines
+  Bots (Angreifer außerhalb von dessen Sichtfeld), ist es ein **Instakill-Backstab**.
+- **Slide-Jump:** Im Sprint Strg/C drücken für einen kurzen Geschwindigkeits-Burst mit abgesenkter,
+  geduckter Sicht — macht dabei die eigene Hitbox kleiner (schwerer zu treffen). Springt man während des
+  Slides, trägt der Schwung mit in die Luft (die eigentliche „Slide-Jump“-Technik aus Rivals).
 - **Bots:** 4 Gegner pro Runde. Patrouillieren zwischen Wegpunkten, erkennen den Spieler nur per
   Sichtlinien-Raycast (kein Wallhack), verfolgen und schießen dann bewusst ungenau, suchen bei niedriger
   HP Deckung und respawnen nach kurzer Verzögerung.
 - **Runden:** 90 Sekunden Zeitlimit, Live-Score im HUD, danach Scoreboard mit „Neue Runde“.
 - **Maps:** Offene Arena (weite Sichtlinien), Deckungshof (Kisten & niedrige Mauern) und Korridore
   (enge Gänge mit mehreren Kreuzungen) — Auswahl über ein Menü vor Rundenstart.
+
+Bewegung, Waffenbalance und Rechtsklick-Fähigkeiten orientieren sich an [Roblox Rivals](https://robloxrivals.fandom.com/wiki/Roblox_Rivals_Wiki)
+(Slide-Jump-Tech, Move-Speed-Modifier pro Waffe, M2-Fähigkeiten statt ADS, 1,25×-Kopfschuss-Multiplikator).
 
 ## So startest du das Spiel über GitHub (GitHub Pages)
 

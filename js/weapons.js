@@ -11,7 +11,7 @@ export const WEAPON_DEFS = [
     name: "Sturmgewehr",
     type: "auto",
     damage: 18,
-    headMultiplier: 2.0,
+    headMultiplier: 1.25, // wie im echten Rivals seit dem Hitscan-Nerf (1.5x -> 1.25x)
     fireRate: 9, // Schuss/Sekunde
     magSize: 30,
     reserveMax: 90,
@@ -25,6 +25,10 @@ export const WEAPON_DEFS = [
     spreadRecover: 0.12,
     moveSpreadMult: 2.2,
     recoilKick: 0.0075,
+    moveSpeedMult: 0.9, // -10% Move Speed, wie in Rivals
+    adsSpreadMult: 0.18, // Rechtsklick: Zielen (ADS) statt Ability
+    adsSpeedMult: 0.8, // zusätzliche Verlangsamung beim Zielen
+    adsFov: 55,
     color: 0x2c3440,
     accent: 0x4fd1ff,
   },
@@ -34,7 +38,7 @@ export const WEAPON_DEFS = [
     name: "Pistole",
     type: "semi",
     damage: 22,
-    headMultiplier: 2.2,
+    headMultiplier: 1.25,
     fireRate: 6.5,
     magSize: 12,
     reserveMax: 48,
@@ -48,6 +52,11 @@ export const WEAPON_DEFS = [
     spreadRecover: 0.16,
     moveSpreadMult: 1.8,
     recoilKick: 0.009,
+    moveSpeedMult: 0.95, // -5% Move Speed
+    fanShotCount: 3, // Rechtsklick: Fächerschuss statt ADS
+    fanShotSpread: 0.012,
+    fanShotInterval: 0.07,
+    fanShotCooldown: 0.9,
     color: 0x3a4250,
     accent: 0xff6b4a,
   },
@@ -59,6 +68,11 @@ export const WEAPON_DEFS = [
     damage: 55,
     range: 2.3,
     cooldown: 0.65,
+    moveSpeedMult: 1.1, // +10% Move Speed, wie in Rivals
+    heavyDamage: 45, // Rechtsklick: Heavy-Backstab statt ADS
+    heavyRange: 2.8,
+    heavyCooldown: 1.25,
+    backstabDotThreshold: -0.3,
     color: 0x8a94a3,
     accent: 0xffffff,
   },
@@ -72,10 +86,13 @@ export const WEAPON_DEFS = [
     fuseTime: 1.5,
     explosionRadius: 5.5,
     explosionDamage: 80,
+    moveSpeedMult: 1.0, // normale Move Speed
     color: 0x33393f,
     accent: 0xff6b4a,
   },
 ];
+
+const ADS_DEFAULT_FOV = 78;
 
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -216,6 +233,14 @@ export class WeaponSystem {
     this.viewKickRot = new THREE.Euler();
     this.meleeSwing = 0;
 
+    // Rechtsklick-Fähigkeiten (ersetzen ADS bei Waffen ohne eigenes adsSpreadMult)
+    this.aiming = false;
+    this.aimLerp = 0;
+    this.fanShotQueue = 0;
+    this.fanShotTimer = 0;
+    this.fanShotCooldown = 0;
+    this.heavyCooldown = 0;
+
     this.triggerHeld = false;
     this.pendingEvents = [];
     this.projectiles = [];
@@ -264,6 +289,8 @@ export class WeaponSystem {
   switchTo(index) {
     if (index < 0 || index >= WEAPON_DEFS.length || index === this.currentIndex) return;
     if (this.reloading) this.reloading = false;
+    this.aiming = false;
+    this.fanShotQueue = 0;
     this.viewmodels[this.currentIndex].visible = false;
     this.currentIndex = index;
     this.viewmodels[this.currentIndex].visible = true;
@@ -314,6 +341,11 @@ export class WeaponSystem {
     return dir;
   }
 
+  _getEffectiveSpread(def) {
+    if (this.aiming && def.adsSpreadMult) return this.currentSpread * def.adsSpreadMult;
+    return this.currentSpread;
+  }
+
   _computeDamage(def, distance, isHead) {
     let dmg = def.damage;
     if (distance > def.optimalRange) {
@@ -324,7 +356,7 @@ export class WeaponSystem {
     return Math.max(1, Math.round(dmg));
   }
 
-  _fireOnce(bots) {
+  _fireOnce(bots, spreadOverride = null) {
     const def = this.currentDef();
     const ammo = this.ammo[this.currentIndex];
     ammo.mag -= 1;
@@ -333,7 +365,8 @@ export class WeaponSystem {
     this.camera.getWorldPosition(origin);
     const dir = new THREE.Vector3();
     this.camera.getWorldDirection(dir);
-    this._applySpread(dir, this.currentSpread);
+    const effectiveSpread = spreadOverride !== null ? spreadOverride : this._getEffectiveSpread(def);
+    this._applySpread(dir, effectiveSpread);
 
     this._raycaster.set(origin, dir);
     this._raycaster.far = def.range;
@@ -434,6 +467,87 @@ export class WeaponSystem {
     return { hit: false };
   }
 
+  // --- Rechtsklick-Fähigkeiten (statt klassischem ADS bei Sekundär/Nahkampf) ---
+
+  setAiming(isAiming) {
+    const def = this.currentDef();
+    this.aiming = !!isAiming && !!def.adsSpreadMult;
+  }
+
+  getAimProgress() {
+    return this.aimLerp;
+  }
+
+  getAdsFov() {
+    return this.currentDef().adsFov || ADS_DEFAULT_FOV;
+  }
+
+  getMoveSpeedMultiplier() {
+    const def = this.currentDef();
+    let mult = def.moveSpeedMult || 1;
+    if (this.aiming && def.adsSpeedMult) mult *= def.adsSpeedMult;
+    return mult;
+  }
+
+  /** Rechtsklick (einmaliger Trigger) für Waffen ohne ADS: Pistole = Fächerschuss, Messer = Heavy-Backstab. */
+  rightClickPress(bots) {
+    const def = this.currentDef();
+    if (def.fanShotCount) return this._triggerFanShot();
+    if (def.heavyDamage) return this._heavyMelee(bots);
+    return null;
+  }
+
+  _triggerFanShot() {
+    const def = this.currentDef();
+    const ammo = this.ammo[this.currentIndex];
+    if (!ammo || this.reloading || this.fanShotCooldown > 0 || ammo.mag <= 0) return false;
+    this.fanShotQueue = Math.min(def.fanShotCount, ammo.mag);
+    this.fanShotTimer = 0;
+    this.fanShotCooldown = def.fanShotCooldown;
+    return true;
+  }
+
+  _heavyMelee(bots) {
+    const def = WEAPON_DEFS[SLOT.MELEE];
+    if (this.heavyCooldown > 0) return { hit: false };
+    this.heavyCooldown = def.heavyCooldown;
+    this.meleeSwing = 1;
+
+    const origin = new THREE.Vector3();
+    this.camera.getWorldPosition(origin);
+    const dir = new THREE.Vector3();
+    this.camera.getWorldDirection(dir);
+
+    this._raycaster.set(origin, dir);
+    this._raycaster.far = def.heavyRange;
+    this._raycaster.near = 0;
+
+    const targets = [];
+    for (const b of bots) if (!b.dead) targets.push(b.headMesh, b.bodyMesh);
+    for (const m of this._wallMeshesRef) targets.push(m);
+
+    const hits = this._raycaster.intersectObjects(targets, false);
+    if (hits.length > 0 && hits[0].object.userData && hits[0].object.userData.bot) {
+      const bot = hits[0].object.userData.bot;
+      const isHead = !!hits[0].object.userData.isHead;
+
+      // Backstab: Angreifer steht (grob) auf der Rückseite der Blickrichtung des Bots.
+      const botForward = new THREE.Vector3(Math.sin(bot.mesh.rotation.y), 0, Math.cos(bot.mesh.rotation.y));
+      const botPos = bot.bodyMesh.getWorldPosition(new THREE.Vector3());
+      const toAttacker = new THREE.Vector3().subVectors(origin, botPos);
+      toAttacker.y = 0;
+      toAttacker.normalize();
+      const isBackstab = botForward.dot(toAttacker) < def.backstabDotThreshold;
+
+      const dmg = isBackstab ? 9999 : def.heavyDamage;
+      const dmgResult = bot.takeDamage(dmg, isHead);
+      const result = { hit: true, isHead, killed: dmgResult.killed, bot, damage: dmg, isBackstab };
+      this.pendingEvents.push(result);
+      return result;
+    }
+    return { hit: false };
+  }
+
   throwUtility() {
     const def = WEAPON_DEFS[SLOT.UTILITY];
     if (this.utilityCooldown > 0) return false;
@@ -527,6 +641,12 @@ export class WeaponSystem {
     this.recoilPitch = 0;
     this.recoilPitchVel = 0;
     this.triggerHeld = false;
+    this.aiming = false;
+    this.aimLerp = 0;
+    this.fanShotQueue = 0;
+    this.fanShotTimer = 0;
+    this.fanShotCooldown = 0;
+    this.heavyCooldown = 0;
     this.pendingEvents = [];
 
     for (const p of this.projectiles) {
@@ -568,7 +688,12 @@ export class WeaponSystem {
       reloading: this.reloading,
       meleeCooldownPct: 1 - Math.min(1, this.meleeCooldown / WEAPON_DEFS[SLOT.MELEE].cooldown),
       utilityCooldownPct: 1 - Math.min(1, this.utilityCooldown / WEAPON_DEFS[SLOT.UTILITY].cooldown),
-      spread: this.currentSpread,
+      heavyCooldownPct: 1 - Math.min(1, this.heavyCooldown / (WEAPON_DEFS[SLOT.MELEE].heavyCooldown || 1)),
+      fanShotCooldownPct: 1 - Math.min(1, this.fanShotCooldown / (WEAPON_DEFS[SLOT.SECONDARY].fanShotCooldown || 1)),
+      spread: this._getEffectiveSpread(def),
+      aiming: this.aiming,
+      aimProgress: this.aimLerp,
+      moveSpeedMult: this.getMoveSpeedMultiplier(),
     };
   }
 
@@ -605,6 +730,27 @@ export class WeaponSystem {
     if (this.meleeCooldown > 0) this.meleeCooldown = Math.max(0, this.meleeCooldown - dt);
     if (this.utilityCooldown > 0) this.utilityCooldown = Math.max(0, this.utilityCooldown - dt);
     if (this.meleeSwing > 0) this.meleeSwing = Math.max(0, this.meleeSwing - dt * 4);
+    if (this.fanShotCooldown > 0) this.fanShotCooldown = Math.max(0, this.fanShotCooldown - dt);
+    if (this.heavyCooldown > 0) this.heavyCooldown = Math.max(0, this.heavyCooldown - dt);
+
+    // Fächerschuss-Queue (Pistolen-Rechtsklick): mehrere Schüsse mit kurzem Intervall
+    if (this.fanShotQueue > 0) {
+      const ammo = this.ammo[this.currentIndex];
+      this.fanShotTimer -= dt;
+      if (this.fanShotTimer <= 0) {
+        if (ammo && ammo.mag > 0) {
+          this._fireOnce(ctx.bots, def.fanShotSpread);
+          this.fanShotQueue--;
+          this.fanShotTimer = def.fanShotInterval;
+        } else {
+          this.fanShotQueue = 0;
+        }
+      }
+    }
+
+    // Zielen (ADS) sanft ein-/ausblenden
+    const aimTarget = this.aiming ? 1 : 0;
+    this.aimLerp += (aimTarget - this.aimLerp) * Math.min(1, dt * 10);
 
     // Spread-Erholung
     const baseSpread = (def.spreadBase || 0) * (moveState.isMoving ? (def.moveSpreadMult || 1) : 1);

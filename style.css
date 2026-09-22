@@ -184,6 +184,10 @@ button#new-round-btn:hover { transform: translateY(-2px); background: #7fdcff; }
 .cross.left { left: -14px; }
 .cross.right { left: 7px; }
 
+#crosshair.aiming .cross {
+  opacity: 0;
+}
+
 #hitmarker {
   position: absolute;
   top: -10px;

@@ -101,6 +101,10 @@ export function setCooldowns(meleePct, utilityPct) {
   els.utilityCd.style.width = Math.round(utilityPct * 100) + "%";
 }
 
+export function setAiming(isAiming) {
+  els.crosshair.classList.toggle("aiming", !!isAiming);
+}
+
 export function setCrosshairSpread(spread) {
   // spread ist ein Bogenmaß-Wert ~0..0.05 -> auf Pixel-Offset mappen
   const px = 6 + Math.min(1, spread / 0.05) * 16;

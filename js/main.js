@@ -8,6 +8,7 @@ import * as UI from "./ui.js";
 
 const ROUND_DURATION = 90;
 const BOT_COUNT = 4;
+const BASE_FOV = 78;
 
 // --- Renderer / Szene / Kamera ---------------------------------------------------------
 const canvas = document.getElementById("game-canvas");
@@ -16,7 +17,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(78, window.innerWidth / window.innerHeight, 0.05, 200);
+const camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.05, 200);
 
 const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8892a0, 0.9);
 scene.add(hemiLight);
@@ -46,7 +47,7 @@ let roundActive = false;
 let deathRespawnTimer = 0;
 
 // --- Input ---------------------------------------------------------------------------
-const keys = { forward: false, back: false, left: false, right: false, jump: false, sprint: false };
+const keys = { forward: false, back: false, left: false, right: false, jump: false, sprint: false, slide: false };
 
 const KEY_MAP = {
   KeyW: "forward",
@@ -56,6 +57,9 @@ const KEY_MAP = {
   Space: "jump",
   ShiftLeft: "sprint",
   ShiftRight: "sprint",
+  ControlLeft: "slide",
+  ControlRight: "slide",
+  KeyC: "slide",
 };
 
 window.addEventListener("keydown", (e) => {
@@ -82,14 +86,27 @@ canvas.addEventListener("mousedown", (e) => {
     player.requestLock();
     return;
   }
-  if (e.button === 0 && player.alive) weapons.startFire();
+  if (!player.alive) return;
+  if (e.button === 0) weapons.startFire();
+  else if (e.button === 2) {
+    // Rechtsklick: Zielen (ADS) beim Sturmgewehr (halten), sonst Einzel-Fähigkeit (Fächerschuss/Heavy)
+    if (weapons.currentIndex === SLOT.PRIMARY) weapons.setAiming(true);
+    else weapons.rightClickPress(bots);
+  }
 });
 window.addEventListener("mouseup", (e) => {
   if (e.button === 0) weapons.stopFire();
+  else if (e.button === 2) weapons.setAiming(false);
 });
-window.addEventListener("blur", () => weapons.stopFire());
+window.addEventListener("blur", () => {
+  weapons.stopFire();
+  weapons.setAiming(false);
+});
 document.addEventListener("pointerlockchange", () => {
-  if (!player.isLocked) weapons.stopFire();
+  if (!player.isLocked) {
+    weapons.stopFire();
+    weapons.setAiming(false);
+  }
 });
 
 window.addEventListener(
@@ -155,6 +172,7 @@ function handlePlayerDamage(amount, attackerBot) {
   const result = player.takeDamage(amount);
   if (result.died) {
     weapons.stopFire();
+    weapons.setAiming(false);
     deathRespawnTimer = 3;
     const label = attackerBot ? attackerBot.name : "deiner eigenen Wurfladung";
     UI.showDeathScreen(label);
@@ -178,11 +196,20 @@ function animate() {
   if (roundActive) {
     if (player.alive) {
       const recoilPitch = weapons.getRecoilPitch();
-      player.update(dt, keys, currentMapData.wallBoxes, currentMapData.bounds, recoilPitch);
+      const weaponSpeedMult = weapons.getMoveSpeedMultiplier();
+      player.update(dt, keys, currentMapData.wallBoxes, currentMapData.bounds, recoilPitch, weaponSpeedMult);
     }
 
     const moveState = { isMoving: player.isMoving, isSprinting: player.isSprinting, grounded: player.grounded };
     weapons.update(dt, moveState, { bots, player });
+
+    // ADS-Zoom sanft auf die Kamera anwenden
+    const aimT = weapons.getAimProgress();
+    const targetFov = THREE.MathUtils.lerp(BASE_FOV, weapons.getAdsFov(), aimT);
+    if (Math.abs(camera.fov - targetFov) > 0.01) {
+      camera.fov = targetFov;
+      camera.updateProjectionMatrix();
+    }
 
     for (const ev of weapons.drainEvents()) {
       if (ev.type === "explosionDamagePlayer") {
@@ -193,7 +220,7 @@ function animate() {
         UI.showHitmarker();
         if (ev.killed) {
           score.player += 1;
-          const how = ev.isExplosion ? " (Wurfladung)" : ev.isHead ? " (Kopfschuss)" : "";
+          const how = ev.isBackstab ? " (Backstab)" : ev.isExplosion ? " (Wurfladung)" : ev.isHead ? " (Kopfschuss)" : "";
           UI.addKillFeed(`Du hast ${ev.bot.name} eliminiert${how}`, false);
         }
       }
@@ -232,6 +259,7 @@ function animate() {
     UI.setHealth(player.hp, player.maxHp);
     UI.setAmmo(hud);
     UI.setCooldowns(hud.meleeCooldownPct, hud.utilityCooldownPct);
+    UI.setAiming(hud.aiming);
     UI.setCrosshairSpread(hud.spread);
     UI.setTimer(roundTimeLeft);
     UI.setScore(score.player, score.bots);
