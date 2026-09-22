@@ -10,22 +10,62 @@
 <div id="app">
   <canvas id="game-canvas"></canvas>
 
-  <!-- ============ MAIN MENU ============ -->
+  <!-- ============ HAUPTMENÜ ============ -->
   <div id="main-menu" class="overlay">
-    <div class="menu-box">
+    <div class="menu-box wide">
       <h1>ARENA <span class="accent">FPS</span></h1>
-      <p class="subtitle">Schnelles Low-Poly Arcade-Shooting — wähle eine Map</p>
+      <p class="subtitle">Schnelles Low-Poly Arcade-Shooting</p>
+
+      <div id="player-summary">
+        <div id="player-level-badge">Lvl <span id="player-level">1</span></div>
+        <div id="xp-block">
+          <div id="xp-bar-bg"><div id="xp-bar-fill"></div></div>
+          <div id="xp-text">0 / 200 XP</div>
+        </div>
+        <div id="currency-display"><span class="coin-icon">◆</span><span id="currency-amount">150</span></div>
+      </div>
+
+      <div class="section-label">Aktuelle Challenges</div>
+      <div id="challenges-list" class="challenges-list"></div>
+
       <div id="mobile-notice" class="hidden">
         Dieses Spiel braucht Maus &amp; Tastatur (Pointer Lock) und läuft nicht auf dem Handy/Tablet —
         bitte auf einem PC/Laptop öffnen.
       </div>
+
+      <div class="menu-actions">
+        <button id="open-loadout-btn" class="menu-btn">Loadout</button>
+        <button id="open-play-btn" class="menu-btn primary">Spielen</button>
+      </div>
+      <p class="hint">WASD Bewegen · Maus Umsehen · Leertaste Springen · Shift Sprint · Strg/C Slide<br/>
+      LMB Schießen · 1-4/Mausrad Waffenwechsel · R Nachladen · F Nahkampf · G Utility · M Match verlassen</p>
+    </div>
+  </div>
+
+  <!-- ============ LOADOUT ============ -->
+  <div id="loadout-screen" class="overlay hidden">
+    <div class="menu-box wide">
+      <h1>LOAD<span class="accent">OUT</span></h1>
+      <div id="loadout-currency"><span class="coin-icon">◆</span><span id="loadout-currency-amount">150</span></div>
+      <div id="loadout-slots"></div>
+      <div class="menu-actions">
+        <button id="loadout-back-btn" class="menu-btn">Zurück</button>
+        <button id="loadout-continue-btn" class="menu-btn primary">Weiter zu Modus &amp; Map</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODUS & MAP ============ -->
+  <div id="mode-select-screen" class="overlay hidden">
+    <div class="menu-box">
+      <h1>MODUS &amp; <span class="accent">MAP</span></h1>
       <div class="section-label">Spielmodus</div>
       <div id="mode-list" class="mode-list"></div>
+      <div class="section-label">Schwierigkeit</div>
+      <div id="difficulty-list" class="mode-list difficulty-list"></div>
       <div class="section-label">Map</div>
       <div id="map-list" class="map-list"></div>
-      <p class="hint">WASD Bewegen · Maus Umsehen · Leertaste Springen · Shift Sprint · Strg/C Slide (+Sprung = Slide-Jump)<br/>
-      LMB Schießen · 1-4 / Mausrad Waffenwechsel · R Nachladen · F Nahkampf · G Utility<br/>
-      RMB: Gewehr = Zielen (ADS) · Pistole = Fächerschuss · Messer = Heavy-Backstab</p>
+      <button id="mode-select-back-btn" class="menu-btn">Zurück zum Hauptmenü</button>
     </div>
   </div>
 
@@ -50,6 +90,8 @@
       <div id="chicken-sub">Bei Rot: nicht bewegen oder schießen!</div>
     </div>
 
+    <div id="leave-hint" class="hidden">M — Match verlassen</div>
+
     <div id="killfeed"></div>
 
     <div id="health-panel">
@@ -62,6 +104,7 @@
 
     <div id="weapon-panel">
       <div id="reload-indicator" class="hidden">NACHLADEN…</div>
+      <div id="heal-indicator" class="hidden">HEILT…</div>
       <div id="ammo-text"><span id="ammo-mag">30</span><span id="ammo-reserve-wrap"> / <span id="ammo-reserve">90</span></span></div>
       <div id="weapon-name">Sturmgewehr</div>
       <div id="weapon-slots">
@@ -95,7 +138,13 @@
     <div class="menu-box">
       <h2 id="round-end-title">RUNDE BEENDET</h2>
       <div id="scoreboard"></div>
-      <button id="new-round-btn">Neue Runde</button>
+      <div id="reward-summary">
+        <div id="reward-row"><span id="reward-xp">+0 XP</span><span id="reward-currency">+0 ◆</span></div>
+        <div id="reward-levelup" class="hidden">LEVEL UP! Level <span id="reward-new-level"></span></div>
+      </div>
+      <div id="reward-unlocks"></div>
+      <div id="reward-challenges"></div>
+      <button id="new-round-btn">Weiter</button>
     </div>
   </div>
 </div>
@@ -103,7 +152,8 @@
 <script type="importmap">
 {
   "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
   }
 }
 </script>

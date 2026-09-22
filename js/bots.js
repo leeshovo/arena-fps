@@ -1,7 +1,10 @@
-// bots.js — Gegner-KI: Patrouille, Sichtlinien-Erkennung, Verfolgung, Deckung bei wenig HP,
-// bewusst unpräzises Schießen, Respawn nach Elimination.
+// bots.js — Gegner-KI: Patrouille, Sichtlinien-Erkennung (inkl. Rauch-Blockade), Team-System
+// (Bots können sich auch gegenseitig bekämpfen, z.B. im Team-Deathmatch), Deckung bei wenig HP,
+// Munition/Nachladen, reaktives Ausweichen, wählbare Schwierigkeit, humanoide Low-Poly-Modelle.
 import * as THREE from "three";
 import { hasLineOfSight, resolveMove } from "./maps.js";
+
+export const TEAM = { BLUE: "blue", RED: "red" };
 
 const BOT_HEIGHT = 1.8;
 const BOT_RADIUS = 0.4;
@@ -10,60 +13,116 @@ const SIGHT_RANGE = 32;
 const FOV_COS = Math.cos(THREE.MathUtils.degToRad(100) / 2);
 const ATTACK_RANGE = 20;
 const MIN_KEEP_DISTANCE = 7;
-const FIRE_RATE = 2.6; // Schuss/Sekunde
+const FIRE_RATE = 2.6; // Schuss/Sekunde (Basis, Schwierigkeit skaliert)
 const RESPAWN_DELAY = 4;
 const COVER_HP_RATIO = 0.32;
 const WAYPOINT_REACH_DIST = 1.4;
+const BOT_MAG_SIZE = 18;
+const BOT_RELOAD_TIME = 1.8;
 
-const BODY_COLORS = [0xff6b4a, 0x4fd1ff, 0xffd24f, 0x9d6bff, 0x6bff8e];
+export const DIFFICULTY_PRESETS = {
+  easy: { name: "Leicht", accuracyMult: 1.7, fireRateMult: 0.7, sightMult: 0.85, reactionDelay: 0.4 },
+  normal: { name: "Normal", accuracyMult: 1.0, fireRateMult: 1.0, sightMult: 1.0, reactionDelay: 0.18 },
+  hard: { name: "Schwer", accuracyMult: 0.55, fireRateMult: 1.3, sightMult: 1.15, reactionDelay: 0.05 },
+};
+
+const TEAM_COLORS = {
+  [TEAM.BLUE]: [0x4fd1ff, 0x3fa9d6, 0x6be0ff],
+  [TEAM.RED]: [0xff6b4a, 0xe0553a, 0xff8f6b],
+};
 
 let botCounter = 0;
 
-function buildBotMesh(colorIndex) {
+function buildBotMesh(team, colorIndex) {
   const group = new THREE.Group();
-  const color = BODY_COLORS[colorIndex % BODY_COLORS.length];
+  const palette = TEAM_COLORS[team] || TEAM_COLORS[TEAM.RED];
+  const color = palette[colorIndex % palette.length];
 
-  const torsoGeo = new THREE.BoxGeometry(0.7, 1.0, 0.4);
+  const torsoGeo = new THREE.BoxGeometry(0.62, 0.72, 0.34);
   const torsoMat = new THREE.MeshStandardMaterial({ color, roughness: 0.8 });
   const torso = new THREE.Mesh(torsoGeo, torsoMat);
-  torso.position.y = 1.0;
+  torso.position.y = 1.12;
+  torso.castShadow = true;
   group.add(torso);
 
-  const headGeo = new THREE.BoxGeometry(0.42, 0.42, 0.42);
+  const headGeo = new THREE.BoxGeometry(0.38, 0.38, 0.38);
   const headMat = new THREE.MeshStandardMaterial({ color: 0xf2c9a0, roughness: 0.9 });
   const head = new THREE.Mesh(headGeo, headMat);
-  head.position.y = 1.71;
+  head.position.y = 1.67;
+  head.castShadow = true;
   group.add(head);
 
-  const gunGeo = new THREE.BoxGeometry(0.09, 0.09, 0.45);
+  const armMat = new THREE.MeshStandardMaterial({ color, roughness: 0.85 });
+  const armGeo = new THREE.BoxGeometry(0.16, 0.58, 0.18);
+  const armL = new THREE.Mesh(armGeo, armMat);
+  armL.position.set(-0.39, 1.08, 0);
+  armL.rotation.z = 0.08;
+  armL.castShadow = true;
+  group.add(armL);
+  const armR = new THREE.Mesh(armGeo, armMat);
+  armR.position.set(0.39, 1.08, 0);
+  armR.rotation.z = -0.08;
+  armR.castShadow = true;
+  group.add(armR);
+
+  const legMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.9 });
+  const legGeo = new THREE.BoxGeometry(0.24, 0.66, 0.26);
+  const legL = new THREE.Mesh(legGeo, legMat);
+  legL.position.set(-0.15, 0.4, 0);
+  legL.castShadow = true;
+  group.add(legL);
+  const legR = new THREE.Mesh(legGeo, legMat);
+  legR.position.set(0.15, 0.4, 0);
+  legR.castShadow = true;
+  group.add(legR);
+
+  const gunGeo = new THREE.BoxGeometry(0.08, 0.08, 0.42);
   const gunMat = new THREE.MeshStandardMaterial({ color: 0x22262c });
   const gun = new THREE.Mesh(gunGeo, gunMat);
-  gun.position.set(0.42, 1.05, 0.15);
+  gun.position.set(0.42, 1.12, -0.12);
   group.add(gun);
-
-  const legGeo = new THREE.BoxGeometry(0.6, 0.5, 0.36);
-  const legMat = new THREE.MeshStandardMaterial({ color: 0x2b2f36, roughness: 0.9 });
-  const legs = new THREE.Mesh(legGeo, legMat);
-  legs.position.y = 0.25;
-  group.add(legs);
 
   torso.userData.isHead = false;
   head.userData.isHead = true;
+  armL.userData.isHead = false;
+  armR.userData.isHead = false;
 
-  return { group, torso, head };
+  return { group, torso, head, legL, legR, armL, armR };
+}
+
+function segmentIntersectsSphere(from, to, center, radius) {
+  const dir = new THREE.Vector3().subVectors(to, from);
+  const len = dir.length();
+  if (len < 0.001) return false;
+  dir.normalize();
+  const toCenter = new THREE.Vector3().subVectors(center, from);
+  const proj = THREE.MathUtils.clamp(toCenter.dot(dir), 0, len);
+  const closest = from.clone().addScaledVector(dir, proj);
+  return closest.distanceTo(center) < radius;
+}
+
+function isAliveCombatant(c) {
+  if (!c) return false;
+  return c.dead !== undefined ? !c.dead : !!c.alive;
 }
 
 export class Bot {
-  constructor(scene, mapData, colorIndex) {
+  constructor(scene, mapData, colorIndex, team = TEAM.RED, difficulty = "normal") {
     this.id = botCounter++;
     this.name = `Bot ${this.id + 1}`;
     this.scene = scene;
     this.mapData = mapData;
+    this.team = team;
+    this.difficulty = DIFFICULTY_PRESETS[difficulty] || DIFFICULTY_PRESETS.normal;
 
-    const { group, torso, head } = buildBotMesh(colorIndex);
+    const { group, torso, head, legL, legR, armL, armR } = buildBotMesh(team, colorIndex);
     this.mesh = group;
     this.bodyMesh = torso;
     this.headMesh = head;
+    this.legL = legL;
+    this.legR = legR;
+    this.armL = armL;
+    this.armR = armR;
     this.bodyMesh.userData.bot = this;
     this.headMesh.userData.bot = this;
     scene.add(this.mesh);
@@ -78,9 +137,21 @@ export class Bot {
     this.waypointIndex = Math.floor(Math.random() * mapData.patrolPoints.length);
     this.fireCooldown = Math.random() * 0.5;
     this.coverTarget = null;
-    this.stateFlipTimer = 0;
     this.strafeDir = Math.random() < 0.5 ? 1 : -1;
     this.strafeTimer = 2 + Math.random() * 2;
+    this.walkPhase = Math.random() * Math.PI * 2;
+
+    this.magAmmo = BOT_MAG_SIZE;
+    this.reloading = false;
+    this.reloadTimer = 0;
+
+    this.lastAttacker = null;
+    this.secondLastAttacker = null;
+    this.dodgeTimer = 0;
+    this.dodgeDir = 1;
+
+    this.currentTargetId = null;
+    this.targetAcquiredAt = 0;
 
     this.respawnAt(true);
   }
@@ -93,23 +164,29 @@ export class Bot {
     this.dead = false;
     this.state = "patrol";
     this.waypointIndex = Math.floor(Math.random() * this.mapData.patrolPoints.length);
+    this.magAmmo = BOT_MAG_SIZE;
+    this.reloading = false;
     this.mesh.visible = true;
     this._syncMesh();
-    if (!initial) {
-      // kurzer Spawn-"Pop"
-      this.mesh.scale.setScalar(0.001);
-    }
+    if (!initial) this.mesh.scale.setScalar(0.001);
   }
 
-  takeDamage(amount, isHead) {
+  /** @param {number} amount @param {boolean} isHead @param {string} sourceTag z.B. "player" oder eine Bot-Id */
+  takeDamage(amount, isHead, sourceTag) {
     if (this.dead) return { killed: false };
     this.hp -= amount;
+    this.secondLastAttacker = this.lastAttacker;
+    this.lastAttacker = sourceTag ?? this.lastAttacker;
+    this.dodgeTimer = 0.4;
+    this.dodgeDir = Math.random() < 0.5 ? 1 : -1;
+
     if (this.hp <= 0) {
       this.hp = 0;
       this.dead = true;
       this.mesh.visible = false;
       this.respawnTimer = RESPAWN_DELAY;
-      return { killed: true };
+      const assistTag = this.secondLastAttacker && this.secondLastAttacker !== this.lastAttacker ? this.secondLastAttacker : null;
+      return { killed: true, killerTag: this.lastAttacker, assistTag };
     }
     return { killed: false };
   }
@@ -120,9 +197,16 @@ export class Bot {
 
   _syncMesh() {
     this.mesh.position.set(this.position.x, this.position.y, this.position.z);
-    if (this.mesh.scale.x < 1) {
-      this.mesh.scale.setScalar(Math.min(1, this.mesh.scale.x + 0.08));
-    }
+    if (this.mesh.scale.x < 1) this.mesh.scale.setScalar(Math.min(1, this.mesh.scale.x + 0.08));
+  }
+
+  _animateWalk(dt, moving) {
+    if (moving) this.walkPhase += dt * 9;
+    const swing = moving ? Math.sin(this.walkPhase) * 0.5 : 0;
+    this.legL.rotation.x = swing;
+    this.legR.rotation.x = -swing;
+    this.armL.rotation.x = -swing * 0.7;
+    this.armR.rotation.x = swing * 0.7;
   }
 
   _moveToward(target, dt, wallBoxes, bounds, speedMult = 1) {
@@ -131,10 +215,16 @@ export class Bot {
     if (dist < 0.05) return dist;
     dir.normalize();
 
+    // Reaktiver Sidestep kurz nach einem Treffer
+    if (this.dodgeTimer > 0) {
+      this.dodgeTimer -= dt;
+      const perp = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(this.dodgeDir * 0.6);
+      dir.add(perp).normalize();
+    }
+
     const step = BOT_SPEED * speedMult * dt;
     const { x, z } = resolveMove(wallBoxes, this.position, dir.x * step, dir.z * step, this.position.y, BOT_HEIGHT, BOT_RADIUS);
 
-    // Wenn blockiert (kaum Bewegung), seitlich ausweichen
     const moved = Math.hypot(x - this.position.x, z - this.position.z);
     if (moved < step * 0.3) {
       const perp = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(this.strafeDir);
@@ -146,51 +236,83 @@ export class Bot {
       this.position.z = THREE.MathUtils.clamp(z, -bounds.half, bounds.half);
     }
 
-    // Blickrichtung zum Ziel drehen
     const facing = Math.atan2(target.x - this.position.x, target.z - this.position.z);
     this.mesh.rotation.y = facing;
-
+    this._animateWalk(dt, moved > 0.001);
     return dist;
   }
 
-  _canSeePlayer(player, wallMeshes) {
+  _canSee(targetEntity, wallMeshes, smokeVolumes) {
     const eye = this.getEyePosition();
-    const playerEye = player.getEyePosition();
-    const distV = new THREE.Vector3().subVectors(playerEye, eye);
+    const targetEye = targetEntity.getEyePosition();
+    const distV = new THREE.Vector3().subVectors(targetEye, eye);
     const dist = distV.length();
-    if (dist > SIGHT_RANGE) return false;
+    const sightRange = SIGHT_RANGE * this.difficulty.sightMult;
+    if (dist > sightRange) return false;
 
     const facing = new THREE.Vector3(Math.sin(this.mesh.rotation.y), 0, Math.cos(this.mesh.rotation.y));
-    const toPlayer = distV.clone();
-    toPlayer.y = 0;
-    toPlayer.normalize();
-    if (facing.dot(toPlayer) < FOV_COS && this.state !== "chase" && this.state !== "attack" && this.state !== "cover") {
-      return false; // außerhalb Sichtfeld während Patrouille
-    }
+    const toTarget = distV.clone();
+    toTarget.y = 0;
+    toTarget.normalize();
+    if (facing.dot(toTarget) < FOV_COS && this.state === "patrol") return false;
 
-    return hasLineOfSight(wallMeshes, eye, playerEye, SIGHT_RANGE);
+    if (!hasLineOfSight(wallMeshes, eye, targetEye, sightRange)) return false;
+    if (smokeVolumes && smokeVolumes.length) {
+      for (const s of smokeVolumes) {
+        if (segmentIntersectsSphere(eye, targetEye, s.position, s.radius)) return false;
+      }
+    }
+    return true;
   }
 
-  _shootAtPlayer(player, wallMeshes) {
+  /** Wählt das nächste sichtbare gegnerische Ziel (Spieler oder feindlicher Bot). */
+  _selectTarget(player, allBots, wallMeshes, smokeVolumes) {
+    const candidates = [];
+    if (player && player.team !== this.team && isAliveCombatant(player)) candidates.push(player);
+    for (const b of allBots) {
+      if (b === this) continue;
+      if (b.team === this.team) continue;
+      if (!isAliveCombatant(b)) continue;
+      candidates.push(b);
+    }
+    let best = null;
+    let bestDist = Infinity;
+    for (const c of candidates) {
+      if (!this._canSee(c, wallMeshes, smokeVolumes)) continue;
+      const d = this.position.distanceTo(c.position);
+      if (d < bestDist) {
+        bestDist = d;
+        best = c;
+      }
+    }
+    return best;
+  }
+
+  _shootAtTarget(target, wallMeshes, sourceTag) {
     const eye = this.getEyePosition();
-    const playerEye = player.getEyePosition();
-    const dist = eye.distanceTo(playerEye);
+    const targetEye = target.getEyePosition();
+    const dist = eye.distanceTo(targetEye);
 
-    // Bewusst unpräzise Trefferquote: Streuung wächst mit Distanz.
-    const inaccuracy = 0.9 + dist * 0.045;
-    const targetPoint = playerEye.clone().add(
-      new THREE.Vector3((Math.random() - 0.5) * inaccuracy, (Math.random() - 0.5) * inaccuracy * 0.6, (Math.random() - 0.5) * inaccuracy)
+    const inaccuracy = (0.9 + dist * 0.045) * this.difficulty.accuracyMult;
+    const jitter = new THREE.Vector3(
+      (Math.random() - 0.5) * inaccuracy,
+      (Math.random() - 0.5) * inaccuracy * 0.6,
+      (Math.random() - 0.5) * inaccuracy
     );
-
+    const targetPoint = targetEye.clone().add(jitter);
     const dir = new THREE.Vector3().subVectors(targetPoint, eye).normalize();
     const raycaster = new THREE.Raycaster(eye, dir, 0, SIGHT_RANGE);
-    const targets = [...wallMeshes, player.hitMesh];
-    const hits = raycaster.intersectObjects(targets, false);
+    const hitMesh = target.hitMesh || target.bodyMesh;
+    const hits = raycaster.intersectObjects([...wallMeshes, hitMesh], false);
 
-    if (hits.length > 0 && hits[0].object === player.hitMesh) {
+    if (hits.length > 0 && hits[0].object === hitMesh) {
       const base = 7 + Math.random() * 7;
       const falloff = Math.max(0.4, 1 - dist / SIGHT_RANGE);
       const dmg = Math.round(base * falloff);
+      if (target.dead !== undefined) {
+        const result = target.takeDamage(dmg, false, sourceTag);
+        return { type: "hitBot", amount: dmg, target, killed: result.killed, assistTag: result.assistTag, killerBot: this };
+      }
       return { type: "hitPlayer", amount: dmg, bot: this };
     }
     return { type: "shotMissed" };
@@ -209,7 +331,14 @@ export class Bot {
     return best;
   }
 
-  update(dt, player, wallBoxes, wallMeshes, bounds) {
+  /**
+   * @param {number} dt
+   * @param {object} player Spieler (Kombattant, kann auch selbst tot/Team sein)
+   * @param {Bot[]} allBots alle Bots der Runde (für Team-Kämpfe)
+   * @param {THREE.Box3[]} wallBoxes @param {THREE.Object3D[]} wallMeshes @param {object} bounds
+   * @param {Array} smokeVolumes aktive Rauchwolken [{position, radius}]
+   */
+  update(dt, player, allBots, wallBoxes, wallMeshes, bounds, smokeVolumes = []) {
     const events = [];
 
     if (this.dead) {
@@ -219,85 +348,109 @@ export class Bot {
     }
 
     this._syncMesh();
-
     if (this.fireCooldown > 0) this.fireCooldown -= dt;
 
-    const canSee = player.alive && this._canSeePlayer(player, wallMeshes);
+    // Nachladen
+    if (this.reloading) {
+      this.reloadTimer -= dt;
+      if (this.reloadTimer <= 0) {
+        this.reloading = false;
+        this.magAmmo = BOT_MAG_SIZE;
+      }
+    }
+
+    const target = this._selectTarget(player, allBots, wallMeshes, smokeVolumes);
+    const canSee = !!target;
+    if (canSee) {
+      if (this.currentTargetId !== target) {
+        this.currentTargetId = target;
+        this.targetAcquiredAt = performance.now() / 1000;
+      }
+    } else {
+      this.currentTargetId = null;
+    }
     const hpRatio = this.hp / this.maxHp;
 
     if (canSee && hpRatio <= COVER_HP_RATIO && this.state !== "cover") {
       this.state = "cover";
       this.coverTarget = this._nearestCoverSpot();
     } else if (canSee && this.state !== "cover") {
-      const eye = this.getEyePosition();
-      const dist = eye.distanceTo(player.getEyePosition());
+      const dist = this.getEyePosition().distanceTo(target.getEyePosition());
       this.state = dist <= ATTACK_RANGE ? "attack" : "chase";
     } else if (!canSee && this.state !== "cover") {
       this.state = "patrol";
     }
 
-    if (this.state === "patrol") {
-      const target = this.mapData.patrolPoints[this.waypointIndex];
-      const dist = this._moveToward(target, dt, wallBoxes, bounds, 0.55);
-      if (dist < WAYPOINT_REACH_DIST) {
-        this.waypointIndex = (this.waypointIndex + 1) % this.mapData.patrolPoints.length;
-      }
-    } else if (this.state === "chase") {
-      this._moveToward(player.position, dt, wallBoxes, bounds, 1.0);
-    } else if (this.state === "attack") {
-      const eye = this.getEyePosition();
-      const dist = eye.distanceTo(player.getEyePosition());
+    const reacted = canSee && performance.now() / 1000 - this.targetAcquiredAt >= this.difficulty.reactionDelay;
 
-      // Auf Distanz bleiben + leicht strafen
+    if (this.state === "patrol") {
+      const wp = this.mapData.patrolPoints[this.waypointIndex];
+      const dist = this._moveToward(wp, dt, wallBoxes, bounds, 0.55);
+      if (dist < WAYPOINT_REACH_DIST) this.waypointIndex = (this.waypointIndex + 1) % this.mapData.patrolPoints.length;
+    } else if (this.state === "chase") {
+      this._moveToward(target.position, dt, wallBoxes, bounds, 1.0);
+    } else if (this.state === "attack") {
+      const dist = this.getEyePosition().distanceTo(target.getEyePosition());
       this.strafeTimer -= dt;
       if (this.strafeTimer <= 0) {
         this.strafeDir *= -1;
         this.strafeTimer = 1.5 + Math.random() * 2;
       }
       if (dist < MIN_KEEP_DISTANCE) {
-        const away = new THREE.Vector3().subVectors(this.position, player.position).normalize();
-        const retreatTarget = this.position.clone().addScaledVector(away, 4);
-        this._moveToward(retreatTarget, dt, wallBoxes, bounds, 0.8);
+        const away = new THREE.Vector3().subVectors(this.position, target.position).normalize();
+        this._moveToward(this.position.clone().addScaledVector(away, 4), dt, wallBoxes, bounds, 0.8);
       } else {
-        const facing = Math.atan2(player.position.x - this.position.x, player.position.z - this.position.z);
+        const facing = Math.atan2(target.position.x - this.position.x, target.position.z - this.position.z);
         const perp = new THREE.Vector3(Math.cos(facing), 0, -Math.sin(facing)).multiplyScalar(this.strafeDir);
-        const strafeTarget = this.position.clone().addScaledVector(perp, 3);
-        this._moveToward(strafeTarget, dt, wallBoxes, bounds, 0.5);
+        this._moveToward(this.position.clone().addScaledVector(perp, 3), dt, wallBoxes, bounds, 0.5);
       }
 
-      if (canSee && this.fireCooldown <= 0) {
-        this.fireCooldown = 1 / FIRE_RATE;
-        const shotResult = this._shootAtPlayer(player, wallMeshes);
-        events.push(shotResult);
+      if (reacted && !this.reloading && this.fireCooldown <= 0) {
+        if (this.magAmmo > 0) {
+          this.fireCooldown = 1 / (FIRE_RATE * this.difficulty.fireRateMult);
+          this.magAmmo -= 1;
+          events.push(this._shootAtTarget(target, wallMeshes, `bot:${this.id}`));
+          if (this.magAmmo <= 0) {
+            this.reloading = true;
+            this.reloadTimer = BOT_RELOAD_TIME;
+          }
+        } else if (!this.reloading) {
+          this.reloading = true;
+          this.reloadTimer = BOT_RELOAD_TIME;
+        }
       }
     } else if (this.state === "cover") {
-      const target = this.coverTarget || this._nearestCoverSpot();
-      const eye = this.getEyePosition();
-      const distToCover = target ? target.distanceTo(this.position) : Infinity;
+      const coverPoint = this.coverTarget || this._nearestCoverSpot();
+      const distToCover = coverPoint ? coverPoint.distanceTo(this.position) : Infinity;
 
       if (distToCover > 1.2) {
-        this._moveToward(target, dt, wallBoxes, bounds, 1.1);
-      } else if (canSee && this.fireCooldown <= 0) {
-        // Kurz aus der Deckung "peeken" und schießen
-        this.fireCooldown = 1 / (FIRE_RATE * 0.7);
-        const shotResult = this._shootAtPlayer(player, wallMeshes);
-        events.push(shotResult);
+        this._moveToward(coverPoint, dt, wallBoxes, bounds, 1.1);
+      } else if (canSee && reacted && !this.reloading && this.fireCooldown <= 0) {
+        if (this.magAmmo > 0) {
+          this.fireCooldown = 1 / (FIRE_RATE * this.difficulty.fireRateMult * 0.7);
+          this.magAmmo -= 1;
+          events.push(this._shootAtTarget(target, wallMeshes, `bot:${this.id}`));
+          if (this.magAmmo <= 0) {
+            this.reloading = true;
+            this.reloadTimer = BOT_RELOAD_TIME;
+          }
+        } else {
+          this.reloading = true;
+          this.reloadTimer = BOT_RELOAD_TIME;
+        }
       }
 
-      // Bei Erholung oder Verlust des Ziels zurück zur normalen KI
-      if (this.hp / this.maxHp > COVER_HP_RATIO + 0.15) {
-        this.state = "patrol";
-      }
+      if (this.hp / this.maxHp > COVER_HP_RATIO + 0.15) this.state = "patrol";
     }
 
     return events;
   }
 }
 
-export function createBots(scene, count, mapData) {
+export function createBots(scene, count, mapData, team = TEAM.RED, difficulty = "normal", colorOffset = 0) {
   const bots = [];
   for (let i = 0; i < count; i++) {
-    bots.push(new Bot(scene, mapData, i));
+    bots.push(new Bot(scene, mapData, colorOffset + i, team, difficulty));
   }
   return bots;
 }

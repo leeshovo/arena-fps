@@ -42,6 +42,7 @@ export class Player {
     this.hp = MAX_HP;
     this.maxHp = MAX_HP;
     this.alive = true;
+    this.team = "blue"; // von main.js je nach Modus gesetzt (Team-Deathmatch etc.)
 
     this.isMoving = false;
     this.isSprinting = false;

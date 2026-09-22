@@ -1,16 +1,19 @@
 # Arena FPS
 
-Ein schneller Low-Poly Arcade-Shooter im Browser: 3 Arenen, 4 Waffenslots, patrouillierende und
-schießende Bots, 90-Sekunden-Runden mit Scoreboard.
+Ein vollständiger Low-Poly Arcade-Shooter im Browser: 8 Spielmodi, 14 Waffen mit 5 Skins,
+Team-Bots mit wählbarer Schwierigkeit, ein XP-/Level-/Währungs-System mit Loadout-Freischaltungen
+und rotierenden Challenges — alles clientseitig, ohne Backend.
 
 **Spielen: https://leeshovo.github.io/arena-fps/**
 
 Gebaut mit [Three.js](https://threejs.org/) (r160) über eine Import-Map direkt vom CDN geladen —
-kein Build-Schritt, keine externen 3D-Modelle, alles aus Primitives (Box/Plane/Zylinder) und Farben.
+kein Build-Schritt, keine externen 3D-/Audio-Dateien. Alle Geometrie besteht aus Primitives, alle
+Sounds werden zur Laufzeit per Web Audio API synthetisiert.
 
-**Optik:** helle, sterile Chunky-Low-Poly-Arenen mit prozeduralem Kachelraster auf Wänden/Boden,
-dunkle Waffen-Viewmodels mit pulsierendem Lila-Energie-Riss-Overlay, farbige Paintball-Treffer-Decals
-und ein dunkles, abgerundetes HUD mit kräftigen Akzentfarben — angelehnt an den Rivals-Look.
+**Optik:** helle, sterile Chunky-Low-Poly-Arenen mit prozeduralem Kachelraster, weichen Kontakt-
+schatten, Bloom und kurzer Chromatic Aberration/Screen-Shake bei Treffern. Dunkle Waffen-Viewmodels
+mit pulsierendem Energie-Riss-Overlay, humanoide Team-Bots, Landestaub/Sprintstaub-Partikel und
+farbige Paintball-Treffer-Decals — angelehnt an den Rivals-Look.
 
 ## Steuerung
 
@@ -22,69 +25,83 @@ und ein dunkles, abgerundetes HUD mit kräftigen Akzentfarben — angelehnt an d
 | Shift | Sprinten |
 | Strg / C | Slide (im Sprint) — + Sprung = **Slide-Jump** für Extra-Speed |
 | Linksklick | Schießen (halten für Automatikfeuer) |
-| Rechtsklick | Waffen-Fähigkeit: Gewehr = Zielen (ADS), Pistole = Fächerschuss, Messer = Heavy-Backstab, Utility = Subspace-Pad |
-| 1 – 4 / Mausrad | Waffe wechseln (Sturmgewehr, Pistole, Messer, Wurfladung) |
+| Rechtsklick | Waffen-Fähigkeit (ADS/Fächerschuss/Heavy-Backstab/Subspace-Pad — je nach Waffe) |
+| 1 – 4 / Mausrad | Waffe wechseln |
 | R | Nachladen |
 | F | Nahkampf (Quick-Melee, unabhängig vom Slot) |
-| G | Utility (Wurfladung) |
+| G | Utility (Wurfladung/Rauch/Heilung — je nach Loadout) |
+| M | Match jederzeit verlassen |
 
-## Spielprinzip
+## Menü-Navigation
 
-- **Waffen:** Sturmgewehr und Pistole mit Magazin, Nachladen, Streuung, Rückstoß, Distanz-Schadensfalloff
-  und Kopfschuss-Multiplikator (1,25× — wie im echten Rivals). Jede Waffe hat einen eigenen Move-Speed-Modifier
-  (Gewehr -10 %, Pistole -5 %, Messer +10 %). Dazu ein Nahkampfmesser (Cooldown, einmaliger Treffer) und eine
-  Wurfladung mit Flugbahn, Explosionsradius und Schaden an Spieler *und* Bots (auch Eigenschaden).
-- **Rechtsklick-Fähigkeiten statt klassischem ADS überall:** Das Sturmgewehr zielt (reduzierte Streuung,
-  Kamera-Zoom, weitere Verlangsamung). Die Pistole feuert einen Fächerschuss (3 schnelle Schüsse, kurzer
-  Cooldown). Das Messer schlägt einen Heavy-Angriff mit größerer Reichweite — trifft er den Rücken eines
-  Bots (Angreifer außerhalb von dessen Sichtfeld), ist es ein **Instakill-Backstab**. Die Wurfladung legt
-  ein **Subspace-Pad** ab statt zu werfen (siehe unten).
-- **Slide-Jump:** Im Sprint Strg/C drücken für einen kurzen Geschwindigkeits-Burst mit abgesenkter,
-  geduckter Sicht — macht dabei die eigene Hitbox kleiner (schwerer zu treffen). Springt man während des
-  Slides, trägt der Schwung mit in die Luft (die eigentliche „Slide-Jump“-Technik aus Rivals).
-- **Grenade-Boost:** Die Wurfladung (G) explodiert mit echtem Rückstoß-Impuls, nicht nur Schaden — steht
-  man nah genug in der eigenen Explosion, katapultiert sie einen nach oben/hinten. Klassisches Risiko:
-  zu nah dran kostet auch ordentlich HP, also gilt es die Distanz zu treffen, die noch überlebbar ist.
-- **Subspace-Jump:** Rechtsklick mit ausgerüsteter Wurfladung legt ein Pad am eigenen Standort ab
-  (Cooldown 4 s). Betritt man es (auch sofort, nach kurzer Zündverzögerung), katapultiert es **ohne
-  Schaden** steil nach oben — im Gegensatz zum Grenade-Boost ein risikofreier Vertikal-Sprung.
-- **Triple-Jump:** Pistole und Messer geben beim Ausrüsten in der Luft je einen Extra-Sprung (einmal pro
-  Waffe, bis man wieder landet). Von 1 auf 2 wechseln, während man in der Luft ist, verlängert den Sprung —
-  1 → 2 → wieder 1 kettet zwei Extra-Sprünge zum vollen Triple-Jump. Lässt sich mit Grenade-Boost oder
-  Slide-Jump kombinieren für noch mehr Höhe/Reichweite.
-- **Bots:** 4 Gegner pro Runde. Patrouillieren zwischen Wegpunkten, erkennen den Spieler nur per
-  Sichtlinien-Raycast (kein Wallhack), verfolgen und schießen dann bewusst ungenau, suchen bei niedriger
-  HP Deckung und respawnen nach kurzer Verzögerung.
-- **Runden:** 90 Sekunden Zeitlimit, Live-Score im HUD, danach Scoreboard mit „Neue Runde“.
-- **Maps:** Offene Arena (Leicht, weite Sichtlinien), Deckungshof (Mittel, Kisten & niedrige Mauern) und
-  Korridore (Schwer, enge Gänge mit mehreren Kreuzungen) — mit Schwierigkeits-Badge, Auswahl über ein Menü
-  vor Rundenstart.
+**Hauptmenü** (Level, XP-Balken, Währung, 4 aktive Challenges) → **Loadout** (Waffen/Skins wählen
+oder freischalten) → **Modus & Map** (Spielmodus, Schwierigkeit, Karte) → **Match** → **Rundenende**
+(Scoreboard + XP/Währung/Unlocks) → zurück zum Hauptmenü. „Spielen“ im Hauptmenü überspringt den
+Loadout-Screen und nutzt das zuletzt gewählte Loadout.
 
 ## Spielmodi
 
-Vor jeder Runde lässt sich neben der Map auch ein Modus wählen:
+- **Duell:** 1v1 gegen einen Bot. Erster auf 5 Eliminationen gewinnt sofort.
+- **Team-Deathmatch:** 3v3 — du und 2 Bot-Verbündete (blaues Team) gegen ein feindliches Bot-Team
+  (rot). Bots bekämpfen sich dabei auch gegenseitig, nicht nur dich. Erstes Team auf 30 gewinnt.
+  Schädigst du einen Bot kurz bevor ihn ein Verbündeter eliminiert, zählt das als **Assist**.
+- **Training:** kein Zeitlimit, jederzeit mit `M` verlassen — zum Ausprobieren neuer Waffen/Skins.
+- **Free-for-All:** klassisches Free-for-All gegen 4 Bots, 90 Sekunden.
+- **Gun Game:** jede Elimination schaltet die nächste Waffe frei (Waffenwechsel gesperrt), Sieg bei
+  Elimination mit der letzten Waffe (Utility).
+- **Juggernaut:** 400 HP, 15 % langsamer, gegen die volle Bot-Übermacht.
+- **Swift Standoff:** 1 HP für alle — jeder Treffer eliminiert sofort.
+- **Chicken Game:** Rotlicht/Grünlicht — bei Rot friert alles ein (Bots pausieren), Bewegung/Schuss/
+  Zielen = Sofort-Aus.
 
-- **Duell:** der Standardmodus — Free-for-All gegen 4 Bots, 90 Sekunden, meiste Eliminationen zählen.
-- **Gun Game:** Waffen-Fortschrittsrennen. Start mit dem Sturmgewehr, jede Elimination schaltet die
-  nächste Waffe frei (Sturmgewehr → Pistole → Messer → Wurfladung) und sperrt gleichzeitig den freien
-  Waffenwechsel. Wer als Erstes mit der Wurfladung eliminiert, gewinnt die Runde sofort.
-- **Juggernaut:** Du bekommst 400 HP, bist dafür 15 % langsamer — die komplette Bot-Übermacht jagt dich.
-  Reines Überlebens-/Eliminations-Duell mit umgekehrten Kräfteverhältnissen.
-- **Swift Standoff:** Alle (Spieler *und* Bots) haben nur 1 HP — jeder Treffer eliminiert sofort. Hektisches
-  Kurzrunden-Chaos.
-- **Chicken Game:** Rotlicht/Grünlicht. Die Phase wechselt unregelmäßig zwischen Grün (normales Spiel) und
-  Rot (alles friert ein — Bots pausieren). Wer sich bei Rot bewegt, schießt oder zielt, wird sofort
-  eliminiert; die Bots respektieren die Ampel ebenfalls.
+Zusätzlich vor jeder Runde wählbar: **Schwierigkeit** (Leicht/Normal/Schwer) — steuert Zielgenauigkeit,
+Feuerrate, Sichtweite und Reaktionszeit der Bots.
 
-**Nicht nachgebaut** (brauchen echtes Multiplayer/Accounts, die dieser Solo-vs-Bots-Prototyp nicht hat):
-Ranked, Party/Matchmaking, Team Deathmatch mit echten Teams, Head Honcho, Zombie Tower, Spleef,
-Hardcore Parkour und die übrigen ~15 weiteren Rivals-Modi.
+**Nicht nachgebaut** (brauchen echtes Multiplayer/Accounts): Ranked, Party/Matchmaking, Head Honcho,
+Zombie Tower, Spleef, Hardcore Parkour und weitere Rivals-Modi, die auf echten Mitspielern basieren.
 
-Bewegung, Waffenbalance und Rechtsklick-Fähigkeiten orientieren sich an [Roblox Rivals](https://robloxrivals.fandom.com/wiki/Roblox_Rivals_Wiki)
-(Slide-Jump-Tech, Move-Speed-Modifier pro Waffe, M2-Fähigkeiten statt ADS, 1,25×-Kopfschuss-Multiplikator,
-Grenade-Boost, Subspace-Jump, Triple-Jump). **Nicht nachgebaut:** Rocket-Jump und Quadruple-Jump, da sie in
-Rivals an Waffen hängen, die es in diesem Prototyp nicht gibt (RPG/Grenade Launcher bzw. eine dritte
-leichte Waffe wie Bow) — Grenade-Boost und Subspace-Jump decken die vertikale Mobilität trotzdem ab.
+## Waffenroster (14 Waffen + 5 Skins)
+
+| Slot | Waffen |
+| --- | --- |
+| Primär (6) | Sturmgewehr, SMG, Marksman Rifle (DMR), Schrotflinte (8 Pellets), LMG, Burst-Gewehr (3er-Burst) |
+| Sekundär (3) | Pistole (Fächerschuss), Wuchtrevolver (ADS), Maschinenpistole (Fächerschuss) |
+| Nahkampf (2) | Nahkampfmesser (Heavy-Backstab), Kampfaxt (Heavy ohne Backstab-Bonus, mehr Flächenschaden) |
+| Utility (3) | Wurfladung (Explosion + Subspace-Pad), Rauchgranate (blockiert Bot-Sichtlinie), Med-Kit (Selbstheilung) |
+
+Jede Primärwaffe hat eigene Feuerrate/Schaden/Magazingröße/Streuung/Reichweite und einen eigenen
+Move-Speed-Modifier. Skins (Standard, Gletscher, Inferno, Neon-Violett, Gold) überfärben Grundfarbe
+und Energie-Risse jeder ausgerüsteten Waffe unabhängig voneinander.
+
+## Movement-Techs
+
+- **Slide-Jump:** Im Sprint Strg/C — kurzer Speed-Burst, geduckte Sicht, kleinere Hitbox. Springen
+  währenddessen trägt den Schwung in die Luft.
+- **Grenade-Boost:** Die Wurfladung wirkt einen echten Rückstoß-Impuls — nah genug dran katapultiert
+  sie einen nach oben/hinten (kostet aber HP).
+- **Subspace-Jump:** Rechtsklick mit Wurfladung legt ein Pad ab, das schadenfrei nach oben katapultiert.
+- **Triple-Jump:** Leichte Waffen (SMG, Burst-Gewehr, Pistole, Maschinenpistole, Messer) geben beim
+  Wechsel in der Luft einen Extra-Sprung — 1↔2 wechseln kettet zwei davon zum vollen Triple-Jump.
+
+## Progression & Loadout
+
+- **XP & Level:** Eliminations, Kopfschüsse, Backstabs, Utility-Kills, Nahkampf-Kills, Assists und
+  Rundensiege füllen aktive Challenges; jede Runde gibt zusätzlich Basis-XP/-Währung (mehr bei Sieg).
+- **Währung:** unabhängig vom Level verdient, schaltet Items **vorzeitig** frei (Level-Anforderung
+  wird dabei übersprungen).
+- **Challenges:** 4 gleichzeitig aktiv, zufällig aus einem Pool von 11 Vorlagen. Abschluss gibt einen
+  XP-/Währungs-Bonus und wird sofort durch eine neue Challenge ersetzt.
+- **Loadout-Screen:** pro Slot alle Waffen + Skins mit Freischalt-Status (Level oder Preis), Klick auf
+  ein gesperrtes Item versucht den Kauf.
+- **Speicherung:** Level, XP, Währung, Freischaltungen, aktuelles Loadout und Challenges liegen
+  komplett in `localStorage` (`arenafps_save_v1`) — bleiben über Sessions hinweg erhalten.
+
+## Bots
+
+Patrouillieren zwischen Wegpunkten, erkennen Ziele nur per Sichtlinien-Raycast (kein Wallhack, auch
+durch Rauch blockiert), verfolgen und schießen mit begrenztem Magazin (laden bei leer nach), suchen
+bei niedriger HP Deckung, weichen nach einem Treffer kurz reaktiv aus und respawnen nach Verzögerung.
+Im Team-Modus bekämpfen sich gegnerische Bots auch untereinander, nicht nur den Spieler.
 
 ## So startest du das Spiel über GitHub (GitHub Pages)
 
@@ -115,26 +132,37 @@ npx serve .
 python -m http.server 8000
 ```
 
-Danach `http://localhost:3000` (serve) bzw. `http://localhost:8000` (Python) öffnen. Pointer Lock (Mauslook)
-funktioniert nur in einem echten Browser-Tab, nicht in eingebetteten Vorschau-Frames.
+Danach `http://localhost:3000` (serve) bzw. `http://localhost:8000` (Python) öffnen. Pointer Lock
+(Mauslook) und Sound (Nutzergeste nötig) funktionieren nur in einem echten Browser-Tab, nicht in
+eingebetteten Vorschau-Frames.
 
 ## Projektstruktur
 
 ```
-index.html      Grundgerüst, Import-Map, HUD-Markup
-style.css       Aussehen von HUD und Menüs
+index.html        Grundgerüst, Import-Map (inkl. three/addons für Post-Processing), alle Screens
+style.css         Aussehen von HUD, Menüs, Loadout, Modus-Auswahl
 js/
-  main.js       Einstieg: Rendering-Setup, Input-Handling, Game-Loop, Rundensteuerung
-  player.js     Bewegung, Pointer-Lock-Maussteuerung, Kollision, Head-Bobbing, Gesundheit
-  weapons.js    4 Waffenslots, Schuss-Raycasting, Nachladen, Nahkampf, Utility-Wurf, Effekte
-  bots.js       Gegner-KI: Patrouille, Sichtlinie, Verfolgung, Deckung, Respawn
-  maps.js       3 Arena-Definitionen, Kollisions- und Sichtlinien-Hilfsfunktionen
-  ui.js         HUD, Menüs, Kill-Feed, Treffer-/Schadens-Feedback
+  main.js         Einstieg: Rendering/Post-FX-Setup, Input, Game-Loop, Menü-Navigation, Modi
+  player.js       Bewegung, Pointer-Lock-Maussteuerung, Kollision, Head-Bobbing, Gesundheit
+  weapons.js      14-Waffen-Katalog, Loadout-Aufbau, Schuss-/Nahkampf-/Utility-Logik, Skins
+  bots.js         Gegner-KI: Teams, Sichtlinie (inkl. Rauch), Munition, Schwierigkeit, Modelle
+  maps.js         3 Arena-Definitionen, Kachel-Textur, Kollision, Sichtlinie, Bodenmarkierungen
+  ui.js           Alle Menü-/HUD-Screens (Hauptmenü, Loadout, Modus-Auswahl, HUD, Rundenende)
+  effects.js       Partikel (Lande-/Sprintstaub)
+  postfx.js       Post-Processing: Bloom, Chromatic Aberration, Screen-Shake
+  audio.js        Prozedural erzeugte Soundeffekte (Web Audio API, keine Dateien)
+  save.js         localStorage-Schema (eine JSON-Struktur für alles Folgende)
+  progression.js  XP/Level-Kurve, Währung, Unlock-Katalog
+  challenges.js   Challenge-Pool, aktive Challenges, Fortschritt, Belohnung
+  loadout.js      Aktuelle Waffen-/Skin-Auswahl, Freischalt-Abfragen
 ```
 
 ## Anpassen
 
-Waffenwerte (Schaden, Feuerrate, Magazingröße, Streuung, Reichweite) stehen in `WEAPON_DEFS` in
-[`js/weapons.js`](js/weapons.js). Bot-Verhalten (Sichtweite, Genauigkeit, Deckungsschwelle) in den
-Konstanten am Anfang von [`js/bots.js`](js/bots.js). Neue Maps lassen sich in [`js/maps.js`](js/maps.js)
-als weiterer Eintrag im `MAPS`-Array ergänzen (Wände, Spawnpunkte, Patrouillenrouten, Deckungspunkte).
+Waffenwerte stehen im `WEAPON_CATALOG` in [`js/weapons.js`](js/weapons.js), Skins in
+`SKIN_PALETTES`. Der Unlock-Katalog (Level/Preis pro Item) steht in `UNLOCK_CATALOG` in
+[`js/progression.js`](js/progression.js), die Challenge-Vorlagen im `CHALLENGE_POOL` in
+[`js/challenges.js`](js/challenges.js). Bot-Verhalten und Schwierigkeitsgrade in
+[`js/bots.js`](js/bots.js) (`DIFFICULTY_PRESETS`). Spielmodi in der `MODES`-Liste in
+[`js/main.js`](js/main.js). Neue Maps lassen sich in [`js/maps.js`](js/maps.js) als weiterer
+Eintrag im `MAPS`-Array ergänzen.

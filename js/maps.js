@@ -229,6 +229,7 @@ export function buildMap(scene, mapDef) {
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = 0;
+  ground.receiveShadow = true;
   group.add(ground);
 
   const wallMeshes = [];
@@ -248,11 +249,40 @@ export function buildMap(scene, mapDef) {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(w.pos[0], w.pos[1], w.pos[2]);
     mesh.userData.isWall = true;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
     group.add(mesh);
     wallMeshes.push(mesh);
 
     const box3 = new THREE.Box3().setFromObject(mesh);
     wallBoxes.push(box3);
+  }
+
+  // Bodenmarkierungen: dezente Ringe an den Spawnpunkten zur Orientierung
+  const markerMat = new THREE.MeshBasicMaterial({ color: mapDef.accent, transparent: true, opacity: 0.35, depthWrite: false });
+  for (const sp of mapDef.spawnPoints) {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.7, 6), markerMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(sp[0], 0.02, sp[2]);
+    group.add(ring);
+  }
+  // Mittelmarkierung
+  const centerMark = new THREE.Mesh(new THREE.RingGeometry(1.4, 1.55, 4), markerMat);
+  centerMark.rotation.x = -Math.PI / 2;
+  centerMark.rotation.z = Math.PI / 4;
+  centerMark.position.set(0, 0.02, 0);
+  group.add(centerMark);
+
+  // Kleine Ambient-Deko: ein paar langsam rotierende Akzent-Kristalle
+  const decorSpin = [];
+  const decorPositions = mapDef.spawnPoints.filter((_, i) => i % 2 === 0);
+  for (const dp of decorPositions) {
+    const decoMat = new THREE.MeshStandardMaterial({ color: mapDef.accent, emissive: mapDef.accent, emissiveIntensity: 0.5, roughness: 0.4 });
+    const deco = new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), decoMat);
+    deco.position.set(dp[0] * 0.85, 1.1, dp[2] * 0.85);
+    deco.castShadow = true;
+    group.add(deco);
+    decorSpin.push(deco);
   }
 
   scene.add(group);
@@ -271,9 +301,20 @@ export function buildMap(scene, mapDef) {
     spawnPoints,
     patrolPoints,
     coverSpots,
+    decorSpin,
     bounds: { half: mapDef.groundHalf - 1 },
     accent: mapDef.accent,
   };
+}
+
+/** Rotiert die Ambient-Deko-Objekte einer Map. Rein optisch, in der Game-Loop aufgerufen. */
+export function updateMapDecor(mapData, dt) {
+  if (!mapData || !mapData.decorSpin) return;
+  for (const deco of mapData.decorSpin) {
+    deco.rotation.y += dt * 0.6;
+    deco.rotation.x += dt * 0.3;
+    deco.position.y = 1.1 + Math.sin(performance.now() * 0.0008 + deco.id) * 0.08;
+  }
 }
 
 /** Entfernt eine zuvor gebaute Map wieder aus der Szene. */
