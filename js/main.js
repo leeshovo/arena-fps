@@ -68,10 +68,10 @@ window.addEventListener("keydown", (e) => {
     if (e.code === "Space") e.preventDefault();
   }
   if (!roundActive || !player.alive) return;
-  if (e.code === "Digit1") weapons.switchTo(SLOT.PRIMARY);
-  else if (e.code === "Digit2") weapons.switchTo(SLOT.SECONDARY);
-  else if (e.code === "Digit3") weapons.switchTo(SLOT.MELEE);
-  else if (e.code === "Digit4") weapons.switchTo(SLOT.UTILITY);
+  if (e.code === "Digit1") trySwitchWeapon(() => weapons.switchTo(SLOT.PRIMARY));
+  else if (e.code === "Digit2") trySwitchWeapon(() => weapons.switchTo(SLOT.SECONDARY));
+  else if (e.code === "Digit3") trySwitchWeapon(() => weapons.switchTo(SLOT.MELEE));
+  else if (e.code === "Digit4") trySwitchWeapon(() => weapons.switchTo(SLOT.UTILITY));
   else if (e.code === "KeyR") weapons.reload();
   else if (e.code === "KeyF") weapons.meleeAttack(bots);
   else if (e.code === "KeyG") weapons.throwUtility();
@@ -113,12 +113,25 @@ window.addEventListener(
   "wheel",
   (e) => {
     if (!roundActive || !player.alive || !player.isLocked) return;
-    weapons.switchNext(e.deltaY > 0 ? 1 : -1);
+    trySwitchWeapon(() => weapons.switchNext(e.deltaY > 0 ? 1 : -1));
   },
   { passive: true }
 );
 
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
+/**
+ * Führt einen Waffenwechsel aus und triggert bei Erfolg die Triple-Jump-Tech: wechselt man in der Luft
+ * auf eine leichte Waffe (Pistole/Messer), gibt es einen Extra-Sprung — pro Waffe nur einmal pro Sprung.
+ */
+function trySwitchWeapon(switchFn) {
+  if (!switchFn()) return;
+  const def = weapons.currentDef();
+  if (def.grantsAirJump && !player.grounded && player.alive && player.canUseSwapJump(def.id)) {
+    player.grantExtraJump();
+    player.consumeSwapJump(def.id);
+  }
+}
 
 // --- Rundensteuerung -------------------------------------------------------------------
 function startRound(mapDef) {
@@ -213,7 +226,8 @@ function animate() {
 
     for (const ev of weapons.drainEvents()) {
       if (ev.type === "explosionDamagePlayer") {
-        handlePlayerDamage(ev.damage, null);
+        if (ev.knockback) player.applyImpulse(ev.knockback); // Grenade-Boost-Tech
+        if (ev.damage > 0) handlePlayerDamage(ev.damage, null);
         continue;
       }
       if (ev.hit) {

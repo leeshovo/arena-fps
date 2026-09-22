@@ -18,7 +18,7 @@ kein Build-Schritt, keine externen 3D-Modelle, alles aus Primitives (Box/Plane/Z
 | Shift | Sprinten |
 | Strg / C | Slide (im Sprint) — + Sprung = **Slide-Jump** für Extra-Speed |
 | Linksklick | Schießen (halten für Automatikfeuer) |
-| Rechtsklick | Waffen-Fähigkeit: Gewehr = Zielen (ADS), Pistole = Fächerschuss, Messer = Heavy-Backstab |
+| Rechtsklick | Waffen-Fähigkeit: Gewehr = Zielen (ADS), Pistole = Fächerschuss, Messer = Heavy-Backstab, Utility = Subspace-Pad |
 | 1 – 4 / Mausrad | Waffe wechseln (Sturmgewehr, Pistole, Messer, Wurfladung) |
 | R | Nachladen |
 | F | Nahkampf (Quick-Melee, unabhängig vom Slot) |
@@ -33,10 +33,21 @@ kein Build-Schritt, keine externen 3D-Modelle, alles aus Primitives (Box/Plane/Z
 - **Rechtsklick-Fähigkeiten statt klassischem ADS überall:** Das Sturmgewehr zielt (reduzierte Streuung,
   Kamera-Zoom, weitere Verlangsamung). Die Pistole feuert einen Fächerschuss (3 schnelle Schüsse, kurzer
   Cooldown). Das Messer schlägt einen Heavy-Angriff mit größerer Reichweite — trifft er den Rücken eines
-  Bots (Angreifer außerhalb von dessen Sichtfeld), ist es ein **Instakill-Backstab**.
+  Bots (Angreifer außerhalb von dessen Sichtfeld), ist es ein **Instakill-Backstab**. Die Wurfladung legt
+  ein **Subspace-Pad** ab statt zu werfen (siehe unten).
 - **Slide-Jump:** Im Sprint Strg/C drücken für einen kurzen Geschwindigkeits-Burst mit abgesenkter,
   geduckter Sicht — macht dabei die eigene Hitbox kleiner (schwerer zu treffen). Springt man während des
   Slides, trägt der Schwung mit in die Luft (die eigentliche „Slide-Jump“-Technik aus Rivals).
+- **Grenade-Boost:** Die Wurfladung (G) explodiert mit echtem Rückstoß-Impuls, nicht nur Schaden — steht
+  man nah genug in der eigenen Explosion, katapultiert sie einen nach oben/hinten. Klassisches Risiko:
+  zu nah dran kostet auch ordentlich HP, also gilt es die Distanz zu treffen, die noch überlebbar ist.
+- **Subspace-Jump:** Rechtsklick mit ausgerüsteter Wurfladung legt ein Pad am eigenen Standort ab
+  (Cooldown 4 s). Betritt man es (auch sofort, nach kurzer Zündverzögerung), katapultiert es **ohne
+  Schaden** steil nach oben — im Gegensatz zum Grenade-Boost ein risikofreier Vertikal-Sprung.
+- **Triple-Jump:** Pistole und Messer geben beim Ausrüsten in der Luft je einen Extra-Sprung (einmal pro
+  Waffe, bis man wieder landet). Von 1 auf 2 wechseln, während man in der Luft ist, verlängert den Sprung —
+  1 → 2 → wieder 1 kettet zwei Extra-Sprünge zum vollen Triple-Jump. Lässt sich mit Grenade-Boost oder
+  Slide-Jump kombinieren für noch mehr Höhe/Reichweite.
 - **Bots:** 4 Gegner pro Runde. Patrouillieren zwischen Wegpunkten, erkennen den Spieler nur per
   Sichtlinien-Raycast (kein Wallhack), verfolgen und schießen dann bewusst ungenau, suchen bei niedriger
   HP Deckung und respawnen nach kurzer Verzögerung.
@@ -45,7 +56,10 @@ kein Build-Schritt, keine externen 3D-Modelle, alles aus Primitives (Box/Plane/Z
   (enge Gänge mit mehreren Kreuzungen) — Auswahl über ein Menü vor Rundenstart.
 
 Bewegung, Waffenbalance und Rechtsklick-Fähigkeiten orientieren sich an [Roblox Rivals](https://robloxrivals.fandom.com/wiki/Roblox_Rivals_Wiki)
-(Slide-Jump-Tech, Move-Speed-Modifier pro Waffe, M2-Fähigkeiten statt ADS, 1,25×-Kopfschuss-Multiplikator).
+(Slide-Jump-Tech, Move-Speed-Modifier pro Waffe, M2-Fähigkeiten statt ADS, 1,25×-Kopfschuss-Multiplikator,
+Grenade-Boost, Subspace-Jump, Triple-Jump). **Nicht nachgebaut:** Rocket-Jump und Quadruple-Jump, da sie in
+Rivals an Waffen hängen, die es in diesem Prototyp nicht gibt (RPG/Grenade Launcher bzw. eine dritte
+leichte Waffe wie Bow) — Grenade-Boost und Subspace-Jump decken die vertikale Mobilität trotzdem ab.
 
 ## So startest du das Spiel über GitHub (GitHub Pages)
 

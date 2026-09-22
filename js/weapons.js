@@ -57,6 +57,7 @@ export const WEAPON_DEFS = [
     fanShotSpread: 0.012,
     fanShotInterval: 0.07,
     fanShotCooldown: 0.9,
+    grantsAirJump: true, // Triple-Jump-Tech: Extra-Sprung beim Wechsel in der Luft
     color: 0x3a4250,
     accent: 0xff6b4a,
   },
@@ -73,6 +74,7 @@ export const WEAPON_DEFS = [
     heavyRange: 2.8,
     heavyCooldown: 1.25,
     backstabDotThreshold: -0.3,
+    grantsAirJump: true, // Triple-Jump-Tech: Extra-Sprung beim Wechsel in der Luft
     color: 0x8a94a3,
     accent: 0xffffff,
   },
@@ -86,7 +88,11 @@ export const WEAPON_DEFS = [
     fuseTime: 1.5,
     explosionRadius: 5.5,
     explosionDamage: 80,
+    knockbackForce: 15, // Grenade-Boost: Rückstoß-Impuls bei eigener Explosion
     moveSpeedMult: 1.0, // normale Move Speed
+    subspacePadCooldown: 4.0, // Rechtsklick: Subspace-Pad statt ADS
+    subspacePadLaunchForce: 15,
+    subspacePadLingerTime: 6.0,
     color: 0x33393f,
     accent: 0xff6b4a,
   },
@@ -240,11 +246,13 @@ export class WeaponSystem {
     this.fanShotTimer = 0;
     this.fanShotCooldown = 0;
     this.heavyCooldown = 0;
+    this.padCooldown = 0;
 
     this.triggerHeld = false;
     this.pendingEvents = [];
     this.projectiles = [];
     this.tracers = [];
+    this.pads = [];
 
     this._raycaster = new THREE.Raycaster();
 
@@ -287,7 +295,7 @@ export class WeaponSystem {
   }
 
   switchTo(index) {
-    if (index < 0 || index >= WEAPON_DEFS.length || index === this.currentIndex) return;
+    if (index < 0 || index >= WEAPON_DEFS.length || index === this.currentIndex) return false;
     if (this.reloading) this.reloading = false;
     this.aiming = false;
     this.fanShotQueue = 0;
@@ -295,11 +303,12 @@ export class WeaponSystem {
     this.currentIndex = index;
     this.viewmodels[this.currentIndex].visible = true;
     this.fireCooldown = Math.max(this.fireCooldown, 0.15);
+    return true;
   }
 
   switchNext(dir) {
     const idx = (this.currentIndex + dir + WEAPON_DEFS.length) % WEAPON_DEFS.length;
-    this.switchTo(idx);
+    return this.switchTo(idx);
   }
 
   startFire() {
@@ -489,12 +498,40 @@ export class WeaponSystem {
     return mult;
   }
 
-  /** Rechtsklick (einmaliger Trigger) für Waffen ohne ADS: Pistole = Fächerschuss, Messer = Heavy-Backstab. */
+  /** Rechtsklick (einmaliger Trigger) für Waffen ohne ADS: Pistole = Fächerschuss, Messer = Heavy-Backstab, Utility = Subspace-Pad. */
   rightClickPress(bots) {
     const def = this.currentDef();
     if (def.fanShotCount) return this._triggerFanShot();
     if (def.heavyDamage) return this._heavyMelee(bots);
+    if (def.subspacePadCooldown) return this._placeSubspacePad();
     return null;
+  }
+
+  /** Subspace-Jump-Tech: legt ein Sprungpad ab, das beim Betreten (auch vom Spieler selbst) ohne
+   * Schaden nach oben katapultiert — im Gegensatz zum Grenade-Boost. */
+  _placeSubspacePad() {
+    const def = WEAPON_DEFS[SLOT.UTILITY];
+    if (this.padCooldown > 0) return false;
+    this.padCooldown = def.subspacePadCooldown;
+
+    const pos = new THREE.Vector3();
+    this.camera.getWorldPosition(pos);
+    pos.y = 0.06;
+
+    const geo = new THREE.CylinderGeometry(0.55, 0.55, 0.12, 16);
+    const mat = new THREE.MeshStandardMaterial({
+      color: def.accent,
+      emissive: def.accent,
+      emissiveIntensity: 0.5,
+      transparent: true,
+      opacity: 0.85,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.copy(pos);
+    this.scene.add(mesh);
+
+    this.pads.push({ mesh, life: def.subspacePadLingerTime, launchForce: def.subspacePadLaunchForce, armDelay: 0.2 });
+    return true;
   }
 
   _triggerFanShot() {
@@ -597,12 +634,17 @@ export class WeaponSystem {
       return Math.max(0, Math.round(def.explosionDamage * t));
     };
 
-    // Spieler-Splash (inkl. Eigenschaden)
+    // Spieler-Splash (inkl. Eigenschaden) + Rückstoß-Impuls (Grenade-Boost-Tech)
     const playerEye = player.getEyePosition();
     const distToPlayer = center.distanceTo(playerEye);
-    const playerDmg = applyFalloff(distToPlayer);
-    if (playerDmg > 0) {
-      this.pendingEvents.push({ type: "explosionDamagePlayer", damage: playerDmg });
+    if (distToPlayer <= def.explosionRadius) {
+      const playerDmg = applyFalloff(distToPlayer);
+      const t = 1 - distToPlayer / def.explosionRadius;
+      const pushDir = new THREE.Vector3().subVectors(playerEye, center);
+      if (pushDir.lengthSq() < 0.0001) pushDir.set(0, 1, 0);
+      pushDir.normalize();
+      const knockback = pushDir.multiplyScalar((def.knockbackForce || 0) * t);
+      this.pendingEvents.push({ type: "explosionDamagePlayer", damage: playerDmg, knockback });
     }
 
     // Bot-Splash
@@ -647,6 +689,7 @@ export class WeaponSystem {
     this.fanShotTimer = 0;
     this.fanShotCooldown = 0;
     this.heavyCooldown = 0;
+    this.padCooldown = 0;
     this.pendingEvents = [];
 
     for (const p of this.projectiles) {
@@ -661,6 +704,12 @@ export class WeaponSystem {
       t.mesh.material.dispose();
     }
     this.tracers = [];
+    for (const pad of this.pads) {
+      this.scene.remove(pad.mesh);
+      pad.mesh.geometry.dispose();
+      pad.mesh.material.dispose();
+    }
+    this.pads = [];
 
     for (const vm of this.viewmodels) vm.visible = false;
     this.currentIndex = SLOT.PRIMARY;
@@ -732,6 +781,7 @@ export class WeaponSystem {
     if (this.meleeSwing > 0) this.meleeSwing = Math.max(0, this.meleeSwing - dt * 4);
     if (this.fanShotCooldown > 0) this.fanShotCooldown = Math.max(0, this.fanShotCooldown - dt);
     if (this.heavyCooldown > 0) this.heavyCooldown = Math.max(0, this.heavyCooldown - dt);
+    if (this.padCooldown > 0) this.padCooldown = Math.max(0, this.padCooldown - dt);
 
     // Fächerschuss-Queue (Pistolen-Rechtsklick): mehrere Schüsse mit kurzem Intervall
     if (this.fanShotQueue > 0) {
@@ -823,6 +873,34 @@ export class WeaponSystem {
       if (p.fuse <= 0) {
         this._explode(p, ctx.player, ctx.bots);
         this.projectiles.splice(i, 1);
+      }
+    }
+
+    // Subspace-Pads: Lebenszeit prüfen und auslösen, wenn der Spieler draufsteht
+    for (let i = this.pads.length - 1; i >= 0; i--) {
+      const pad = this.pads[i];
+      if (pad.armDelay > 0) pad.armDelay -= dt;
+      pad.life -= dt;
+
+      let triggered = false;
+      if (pad.armDelay <= 0 && ctx.player && ctx.player.alive) {
+        const dx = ctx.player.position.x - pad.mesh.position.x;
+        const dz = ctx.player.position.z - pad.mesh.position.z;
+        const dy = ctx.player.position.y - pad.mesh.position.y;
+        if (dx * dx + dz * dz < 0.85 * 0.85 && Math.abs(dy) < 1.2) {
+          ctx.player.applyImpulse({ x: 0, y: pad.launchForce, z: 0 });
+          triggered = true;
+        }
+      }
+      // sanftes Pulsieren, solange das Pad aktiv ist
+      pad.mesh.rotation.y += dt * 1.5;
+      pad.mesh.position.y = 0.06 + Math.sin(performance.now() * 0.004) * 0.02;
+
+      if (triggered || pad.life <= 0) {
+        this.scene.remove(pad.mesh);
+        pad.mesh.geometry.dispose();
+        pad.mesh.material.dispose();
+        this.pads.splice(i, 1);
       }
     }
 

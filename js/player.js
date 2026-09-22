@@ -23,6 +23,10 @@ const CROUCH_HEIGHT_MULT = 0.55;
 const CROUCH_EYE_MULT = 0.62;
 const CROUCH_LERP_SPEED = 10;
 
+// Externe Impulse (Grenade-Boost, Subspace-Pad): Geschwindigkeitsstoß, der über Zeit abklingt.
+const EXTERNAL_DECAY = 0.05; // Anteil, der nach 1 Sekunde noch übrig ist
+const AIR_JUMP_MULT = 0.85; // Stärke des Extra-Sprungs beim Waffenwechsel in der Luft (Triple-Jump-Tech)
+
 export class Player {
   constructor(camera, domElement) {
     this.camera = camera;
@@ -51,6 +55,11 @@ export class Player {
     this.slideInitialSpeed = 0;
     this.crouchLerp = 0;
     this._prevSlideKey = false;
+
+    // Grenade-Boost / Subspace-Pad: abklingender externer Geschwindigkeits-Impuls
+    this.externalVelocity = new THREE.Vector3();
+    // Triple-Jump-Tech: pro Waffe (id) nur ein Extra-Sprung in der Luft, bis wieder gelandet wird
+    this.usedSwapJumpWeapons = new Set();
 
     this.isLocked = false;
 
@@ -95,6 +104,8 @@ export class Player {
     this.slideTimer = 0;
     this.slideCooldown = 0;
     this.crouchLerp = 0;
+    this.externalVelocity.set(0, 0, 0);
+    this.usedSwapJumpWeapons.clear();
   }
 
   takeDamage(amount) {
@@ -110,6 +121,29 @@ export class Player {
 
   getEyePosition(target = new THREE.Vector3()) {
     return target.set(this.position.x, this.position.y + EYE_HEIGHT, this.position.z);
+  }
+
+  /** Wirkt einen externen Geschwindigkeits-Impuls (Grenade-Boost, Subspace-Pad). Klingt über Zeit ab. */
+  applyImpulse(vec) {
+    this.externalVelocity.x += vec.x;
+    this.externalVelocity.z += vec.z;
+    this.velocityY += vec.y;
+    if (vec.y > 0) this.grounded = false;
+  }
+
+  /** Extra-Sprung in der Luft (Triple-Jump-Tech durch Waffenwechsel). */
+  grantExtraJump() {
+    this.velocityY = JUMP_SPEED * AIR_JUMP_MULT;
+    this.grounded = false;
+  }
+
+  /** true, wenn diese Waffe seit der letzten Landung noch keinen Extra-Sprung gegeben hat. */
+  canUseSwapJump(weaponId) {
+    return !this.usedSwapJumpWeapons.has(weaponId);
+  }
+
+  consumeSwapJump(weaponId) {
+    this.usedSwapJumpWeapons.add(weaponId);
   }
 
   /**
@@ -156,20 +190,14 @@ export class Player {
     const half = bounds.half;
     const effHeight = THREE.MathUtils.lerp(PLAYER_HEIGHT, PLAYER_HEIGHT * CROUCH_HEIGHT_MULT, this.crouchLerp);
 
+    // Basisbewegung: entweder Slide-Tech oder normales WASD
+    let baseDx = 0;
+    let baseDz = 0;
     if (this.sliding) {
       const t = 1 - this.slideTimer / SLIDE_DURATION;
       const curSpeed = THREE.MathUtils.lerp(this.slideInitialSpeed, this.slideInitialSpeed * SLIDE_END_SPEED_MULT, t);
-      const { x, z } = resolveMove(
-        wallBoxes,
-        this.position,
-        this.slideDir.x * curSpeed * dt,
-        this.slideDir.z * curSpeed * dt,
-        this.position.y,
-        effHeight,
-        PLAYER_RADIUS
-      );
-      this.position.x = THREE.MathUtils.clamp(x, -half, half);
-      this.position.z = THREE.MathUtils.clamp(z, -half, half);
+      baseDx = this.slideDir.x * curSpeed * dt;
+      baseDz = this.slideDir.z * curSpeed * dt;
 
       this.slideTimer -= dt;
       if (this.slideTimer <= 0) {
@@ -180,14 +208,24 @@ export class Player {
       if (moveLen > 0.001) {
         const nx = moveX / moveLen;
         const nz = moveZ / moveLen;
-        const { x, z } = resolveMove(wallBoxes, this.position, nx * speed * dt, nz * speed * dt, this.position.y, effHeight, PLAYER_RADIUS);
-        this.position.x = THREE.MathUtils.clamp(x, -half, half);
-        this.position.z = THREE.MathUtils.clamp(z, -half, half);
+        baseDx = nx * speed * dt;
+        baseDz = nz * speed * dt;
       }
       if (this.slideCooldown > 0) this.slideCooldown = Math.max(0, this.slideCooldown - dt);
     }
 
+    // Externe Impulse (Grenade-Boost, Subspace-Pad) abklingen lassen und mit einrechnen
+    this.externalVelocity.multiplyScalar(Math.pow(EXTERNAL_DECAY, dt));
+    const dx = baseDx + this.externalVelocity.x * dt;
+    const dz = baseDz + this.externalVelocity.z * dt;
+    if (dx !== 0 || dz !== 0) {
+      const { x, z } = resolveMove(wallBoxes, this.position, dx, dz, this.position.y, effHeight, PLAYER_RADIUS);
+      this.position.x = THREE.MathUtils.clamp(x, -half, half);
+      this.position.z = THREE.MathUtils.clamp(z, -half, half);
+    }
+
     // --- Vertikale Bewegung: Schwerkraft + Sprung (kann mitten im Slide ausgelöst werden -> Slide-Jump) ---
+    const wasGrounded = this.grounded;
     if (this.grounded && keys.jump) {
       this.velocityY = JUMP_SPEED;
       this.grounded = false;
@@ -198,6 +236,9 @@ export class Player {
       this.position.y = 0;
       this.velocityY = 0;
       this.grounded = true;
+    }
+    if (!wasGrounded && this.grounded) {
+      this.usedSwapJumpWeapons.clear(); // Landung: Triple-Jump-Ladungen wieder frei
     }
 
     // --- Crouch/Slide-Höhe sanft an-/abgleiten lassen (macht den Spieler dabei ein kleineres Ziel) ---
