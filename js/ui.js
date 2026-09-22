@@ -29,6 +29,7 @@ export function initUI() {
     ammoMag: document.getElementById("ammo-mag"),
     ammoReserve: document.getElementById("ammo-reserve"),
     reloadIndicator: document.getElementById("reload-indicator"),
+    weaponSlots: document.querySelectorAll("#weapon-slots .slot-icon"),
     meleeCd: document.querySelector("#melee-cd .cd-fill"),
     utilityCd: document.querySelector("#utility-cd .cd-fill"),
     damageVignette: document.getElementById("damage-vignette"),
@@ -76,11 +77,20 @@ export function showMainMenu(maps, modes, onSelect) {
     const card = document.createElement("div");
     card.className = "map-card";
     const accentHex = "#" + m.accent.toString(16).padStart(6, "0");
+    const lightAccent = mixHex(accentHex, "#ffffff", 0.55);
+    const darkAccent = mixHex(accentHex, "#0a0e14", 0.6);
     const diffLabel = DIFFICULTY_LABEL[m.difficulty] || "";
     card.innerHTML = `
       <div class="difficulty-badge ${m.difficulty}">${diffLabel}</div>
-      <div class="swatch" style="background:${accentHex}"></div>
-      <div class="name">${m.name}</div>
+      <div class="map-thumb" style="background:linear-gradient(160deg, ${lightAccent}, ${darkAccent})">
+        <span class="thumb-block tb1" style="background:${accentHex}"></span>
+        <span class="thumb-block tb2" style="background:${darkAccent}"></span>
+        <span class="thumb-block tb3" style="background:${lightAccent}"></span>
+        <span class="thumb-fade"></span>
+      </div>
+      <div class="map-banner" style="background:repeating-linear-gradient(45deg, #0a0e14 0 11px, ${accentHex} 11px 22px)">
+        <span class="map-name">${m.name}</span>
+      </div>
       <div class="desc">${m.description}</div>
     `;
     card.addEventListener("click", () => {
@@ -89,6 +99,16 @@ export function showMainMenu(maps, modes, onSelect) {
     });
     els.mapList.appendChild(card);
   }
+}
+
+/** Mischt zwei Hex-Farben (für Thumbnail-Verläufe der Kartenauswahl, rein optisch). */
+function mixHex(hex, target, amount) {
+  const c1 = parseInt(hex.slice(1), 16);
+  const c2 = parseInt(target.slice(1), 16);
+  const r = Math.round(((c1 >> 16) & 255) + (((c2 >> 16) & 255) - ((c1 >> 16) & 255)) * amount);
+  const g = Math.round(((c1 >> 8) & 255) + (((c2 >> 8) & 255) - ((c1 >> 8) & 255)) * amount);
+  const b = Math.round((c1 & 255) + ((c2 & 255) - (c1 & 255)) * amount);
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
 }
 
 export function hideMainMenu() {
@@ -130,6 +150,12 @@ export function setAmmo(state) {
     els.ammoMag.parentElement.style.visibility = "hidden";
   }
   els.reloadIndicator.classList.toggle("hidden", !state.reloading);
+
+  if (typeof state.slotIndex === "number") {
+    els.weaponSlots.forEach((el) => {
+      el.classList.toggle("active", Number(el.dataset.slot) === state.slotIndex);
+    });
+  }
 }
 
 export function setCooldowns(meleePct, utilityPct) {

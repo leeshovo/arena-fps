@@ -5,6 +5,46 @@ const WALL_HEIGHT_TALL = 4.5;
 const WALL_HEIGHT_LOW = 1.3;
 const BOUNDARY_HEIGHT = 5;
 
+// ---------------------------------------------------------------------------
+// Optik: helles, steriles Fliesen-/Gitterraster für Wände & Boden (rein visuell)
+// ---------------------------------------------------------------------------
+const GRID_CELL_SIZE = 2.2;
+const WALL_LIGHTEN = 0.55; // Wände deutlich Richtung Weiß aufhellen, Akzent bleibt nur als Tönung
+
+let _gridCanvas = null;
+function getGridCanvas() {
+  if (_gridCanvas) return _gridCanvas;
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, size, size);
+  // leicht erhabene Fliesenkante: helle Innenfase + etwas dunklere Außenlinie
+  ctx.strokeStyle = "#eef1f5";
+  ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, size - 6, size - 6);
+  ctx.strokeStyle = "#c7cdd6";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, size - 2, size - 2);
+  _gridCanvas = canvas;
+  return canvas;
+}
+
+/** Prozedurale Fliesen-Textur (dient gleichzeitig als Diffuse- und Bump-Map). */
+function makeGridTexture(repeatX, repeatY) {
+  const tex = new THREE.CanvasTexture(getGridCanvas());
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(Math.max(1, repeatX), Math.max(1, repeatY));
+  return tex;
+}
+
+function lightenColor(hex, amount) {
+  return new THREE.Color(hex).lerp(new THREE.Color(0xffffff), amount);
+}
+
 function box(x, y, z, w, h, d, color) {
   return { pos: [x, y, z], size: [w, h, d], color };
 }
@@ -175,8 +215,17 @@ export function buildMap(scene, mapDef) {
   const group = new THREE.Group();
   group.name = `map-${mapDef.id}`;
 
-  const groundGeo = new THREE.PlaneGeometry(mapDef.groundHalf * 2, mapDef.groundHalf * 2);
-  const groundMat = new THREE.MeshStandardMaterial({ color: mapDef.groundColor, roughness: 1, metalness: 0 });
+  const groundSize = mapDef.groundHalf * 2;
+  const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize);
+  const groundTex = makeGridTexture(groundSize / GRID_CELL_SIZE, groundSize / GRID_CELL_SIZE);
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: lightenColor(mapDef.groundColor, 0.25),
+    map: groundTex,
+    bumpMap: groundTex,
+    bumpScale: 0.02,
+    roughness: 1,
+    metalness: 0,
+  });
   const ground = new THREE.Mesh(groundGeo, groundMat);
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = 0;
@@ -187,7 +236,15 @@ export function buildMap(scene, mapDef) {
 
   for (const w of mapDef.walls) {
     const geo = new THREE.BoxGeometry(w.size[0], w.size[1], w.size[2]);
-    const mat = new THREE.MeshStandardMaterial({ color: w.color, roughness: 0.9, metalness: 0.05 });
+    const wallTex = makeGridTexture(w.size[0] / GRID_CELL_SIZE, w.size[1] / GRID_CELL_SIZE);
+    const mat = new THREE.MeshStandardMaterial({
+      color: lightenColor(w.color, WALL_LIGHTEN),
+      map: wallTex,
+      bumpMap: wallTex,
+      bumpScale: 0.018,
+      roughness: 0.95,
+      metalness: 0.02,
+    });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(w.pos[0], w.pos[1], w.pos[2]);
     mesh.userData.isWall = true;
@@ -225,7 +282,11 @@ export function disposeMap(scene, mapData) {
   scene.remove(mapData.group);
   mapData.group.traverse((obj) => {
     if (obj.geometry) obj.geometry.dispose();
-    if (obj.material) obj.material.dispose();
+    if (obj.material) {
+      if (obj.material.map) obj.material.map.dispose();
+      if (obj.material.bumpMap && obj.material.bumpMap !== obj.material.map) obj.material.bumpMap.dispose();
+      obj.material.dispose();
+    }
   });
 }
 

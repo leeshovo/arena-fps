@@ -29,8 +29,8 @@ export const WEAPON_DEFS = [
     adsSpreadMult: 0.18, // Rechtsklick: Zielen (ADS) statt Ability
     adsSpeedMult: 0.8, // zusätzliche Verlangsamung beim Zielen
     adsFov: 55,
-    color: 0x2c3440,
-    accent: 0x4fd1ff,
+    color: 0x15171c,
+    accent: 0xb84dff,
   },
   {
     id: "pistol",
@@ -58,8 +58,8 @@ export const WEAPON_DEFS = [
     fanShotInterval: 0.07,
     fanShotCooldown: 0.9,
     grantsAirJump: true, // Triple-Jump-Tech: Extra-Sprung beim Wechsel in der Luft
-    color: 0x3a4250,
-    accent: 0xff6b4a,
+    color: 0x1c1f26,
+    accent: 0xff8a3d,
   },
   {
     id: "melee",
@@ -75,8 +75,8 @@ export const WEAPON_DEFS = [
     heavyCooldown: 1.25,
     backstabDotThreshold: -0.3,
     grantsAirJump: true, // Triple-Jump-Tech: Extra-Sprung beim Wechsel in der Luft
-    color: 0x8a94a3,
-    accent: 0xffffff,
+    color: 0x1a1d22,
+    accent: 0xb84dff,
   },
   {
     id: "utility",
@@ -93,14 +93,43 @@ export const WEAPON_DEFS = [
     subspacePadCooldown: 4.0, // Rechtsklick: Subspace-Pad statt ADS
     subspacePadLaunchForce: 15,
     subspacePadLingerTime: 6.0,
-    color: 0x33393f,
-    accent: 0xff6b4a,
+    color: 0x181b20,
+    accent: 0xff8a3d,
   },
 ];
 
 const ADS_DEFAULT_FOV = 78;
 
 const UP = new THREE.Vector3(0, 1, 0);
+
+// Kräftige, gesättigte Trefferfarben (paintball-artig) für die Farbspritzer-Decals
+const IMPACT_COLORS = [0xb84dff, 0xff8a3d, 0x4fd1ff, 0xff4d8f, 0x6bff8e];
+
+/**
+ * Streut dünne, leuchtende "Energie-Risse" über ein Waffenmodell — ein pulsierender
+ * Skin-Layer über der dunklen Grundgeometrie. Rein optisch, wird in update() animiert.
+ */
+function addEnergyCracks(group, color, segments) {
+  const cracks = [];
+  for (const seg of segments) {
+    const geo = new THREE.BoxGeometry(seg.len, 0.01, 0.005);
+    const mat = new THREE.MeshStandardMaterial({
+      color,
+      emissive: color,
+      emissiveIntensity: 1.4,
+      roughness: 0.25,
+      metalness: 0.1,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(seg.x, seg.y, seg.z);
+    mesh.rotation.set(seg.rx || 0, seg.ry || 0, seg.rz || 0);
+    group.add(mesh);
+    cracks.push({ mesh, phase: Math.random() * Math.PI * 2, speed: 2.5 + Math.random() * 2.5 });
+  }
+  group.userData.cracks = cracks;
+}
 
 function buildRifleModel(def) {
   const g = new THREE.Group();
@@ -135,11 +164,19 @@ function buildRifleModel(def) {
   g.add(barrel);
 
   const stripe = new THREE.Mesh(
-    new THREE.BoxGeometry(0.02, 0.02, 0.4),
-    new THREE.MeshStandardMaterial({ color: def.accent, emissive: def.accent, emissiveIntensity: 0.6 })
+    new THREE.BoxGeometry(0.022, 0.022, 0.42),
+    new THREE.MeshStandardMaterial({ color: def.accent, emissive: def.accent, emissiveIntensity: 1.1 })
   );
   stripe.position.set(0.046, 0.02, -0.1);
   g.add(stripe);
+
+  addEnergyCracks(g, def.accent, [
+    { len: 0.16, x: 0.03, y: 0.05, z: -0.22, ry: 0.5, rz: 0.3 },
+    { len: 0.12, x: -0.035, y: 0.02, z: -0.05, ry: -0.4, rz: -0.5 },
+    { len: 0.14, x: 0.025, y: -0.02, z: 0.12, ry: 0.3, rz: 0.9 },
+    { len: 0.1, x: -0.02, y: 0.055, z: 0.22, ry: -0.6, rz: 0.2 },
+    { len: 0.09, x: 0.03, y: 0.0, z: -0.4, ry: 0.7, rz: -0.4 },
+  ]);
 
   const muzzle = new THREE.Object3D();
   muzzle.position.set(0, 0.015, -0.63);
@@ -171,6 +208,12 @@ function buildPistolModel(def) {
   barrel.position.set(0, 0.02, -0.17);
   g.add(barrel);
 
+  addEnergyCracks(g, def.accent, [
+    { len: 0.09, x: 0.028, y: 0.02, z: -0.02, ry: 0.4, rz: 0.5 },
+    { len: 0.07, x: -0.03, y: -0.01, z: 0.03, ry: -0.5, rz: -0.3 },
+    { len: 0.06, x: 0.025, y: 0.04, z: 0.08, ry: 0.6, rz: 0.2 },
+  ]);
+
   const muzzle = new THREE.Object3D();
   muzzle.position.set(0, 0.02, -0.23);
   g.add(muzzle);
@@ -192,22 +235,33 @@ function buildMeleeModel(def) {
   );
   handle.position.set(0, 0, 0.02);
   g.add(handle);
+
+  addEnergyCracks(g, def.accent, [
+    { len: 0.07, x: 0.024, y: 0.0, z: 0.0, ry: 0.5, rz: 0.4 },
+    { len: 0.05, x: -0.024, y: 0.0, z: 0.06, ry: -0.5, rz: -0.3 },
+  ]);
   return g;
 }
 
 function buildUtilityModel(def) {
   const g = new THREE.Group();
+  // Kantige, chunky Low-Poly-Form statt runder Kugel
   const grenade = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(0.09, 0),
+    new THREE.OctahedronGeometry(0.1, 0),
     new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.6 })
   );
   g.add(grenade);
   const cap = new THREE.Mesh(
     new THREE.CylinderGeometry(0.025, 0.025, 0.05, 6),
-    new THREE.MeshStandardMaterial({ color: def.accent })
+    new THREE.MeshStandardMaterial({ color: def.accent, emissive: def.accent, emissiveIntensity: 0.5 })
   );
   cap.position.set(0, 0.1, 0);
   g.add(cap);
+
+  addEnergyCracks(g, def.accent, [
+    { len: 0.08, x: 0.03, y: 0.0, z: 0.02, ry: 0.4, rz: 0.6 },
+    { len: 0.06, x: -0.03, y: 0.02, z: -0.02, ry: -0.5, rz: -0.4 },
+  ]);
   return g;
 }
 
@@ -272,15 +326,32 @@ export class WeaponSystem {
   }
 
   _buildMuzzleFlash() {
-    const geo = new THREE.PlaneGeometry(0.22, 0.22);
-    const mat = new THREE.MeshBasicMaterial({
-      color: 0xfff3b0,
+    // Zweistufiger Blitz: helle, kleine Kernform + weicherer, größerer Glow dahinter
+    const group = new THREE.Group();
+    const glowMat = new THREE.MeshBasicMaterial({
+      color: 0xffe8a0,
       transparent: true,
       opacity: 0,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
-    return new THREE.Mesh(geo, mat);
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.4), glowMat);
+    group.add(glow);
+
+    const coreMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const core = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.16), coreMat);
+    core.position.z = 0.001;
+    group.add(core);
+
+    this._muzzleGlow = glow;
+    this._muzzleCore = core;
+    return group;
   }
 
   currentDef() {
@@ -402,6 +473,9 @@ export class WeaponSystem {
         const dmg = this._computeDamage(def, first.distance, isHead);
         const dmgResult = bot.takeDamage(dmg, isHead);
         result = { hit: true, isHead, killed: dmgResult.killed, bot, damage: dmg };
+        this._spawnImpactFX(first, false);
+      } else if (first.object.userData && first.object.userData.isWall) {
+        this._spawnImpactFX(first, true);
       }
     }
 
@@ -416,13 +490,14 @@ export class WeaponSystem {
   }
 
   _triggerMuzzleFlash() {
-    this.muzzleFlashTimer = 0.045;
-    this.muzzleFlash.material.opacity = 1;
+    this.muzzleFlashTimer = 0.05;
+    this._muzzleCore.material.opacity = 1;
+    this._muzzleGlow.material.opacity = 0.85;
     this.muzzleFlash.rotation.z = Math.random() * Math.PI;
     const model = this.viewmodels[this.currentIndex];
     const muzzle = model.userData.muzzle || model;
     this.muzzleFlash.position.copy(muzzle.position);
-    this.muzzleFlash.scale.setScalar(0.8 + Math.random() * 0.4);
+    this.muzzleFlash.scale.setScalar(0.85 + Math.random() * 0.45);
   }
 
   _applyRecoil(def) {
@@ -471,9 +546,42 @@ export class WeaponSystem {
       const dmgResult = bot.takeDamage(def.damage, isHead);
       const result = { hit: true, isHead, killed: dmgResult.killed, bot, damage: def.damage };
       this.pendingEvents.push(result);
+      this._spawnImpactFX(hits[0], false);
       return result;
     }
     return { hit: false };
+  }
+
+  /** Farbspritzer auf Wänden bzw. kurzer Hitmarker-Blitz im Raum bei bestätigten Treffern. */
+  _spawnImpactFX(hit, isWallHit) {
+    if (isWallHit) {
+      const normal = hit.face
+        ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld)
+        : new THREE.Vector3(0, 0, 1);
+      const color = IMPACT_COLORS[Math.floor(Math.random() * IMPACT_COLORS.length)];
+      const size = 0.15 + Math.random() * 0.13;
+      const geo = new THREE.CircleGeometry(size, 7);
+      const mat = new THREE.MeshBasicMaterial({
+        color,
+        transparent: true,
+        opacity: 0.92,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.copy(hit.point).addScaledVector(normal, 0.015);
+      mesh.lookAt(mesh.position.clone().add(normal));
+      mesh.rotation.z = Math.random() * Math.PI * 2;
+      this.scene.add(mesh);
+      this.tracers.push({ mesh, life: 3.2, maxLife: 3.2, isDecal: true });
+    } else {
+      const geo = new THREE.OctahedronGeometry(0.075, 0);
+      const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, depthWrite: false });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.copy(hit.point);
+      this.scene.add(mesh);
+      this.tracers.push({ mesh, life: 0.22, maxLife: 0.22, isHitIcon: true });
+    }
   }
 
   // --- Rechtsklick-Fähigkeiten (statt klassischem ADS bei Sekundär/Nahkampf) ---
@@ -518,11 +626,14 @@ export class WeaponSystem {
     this.camera.getWorldPosition(pos);
     pos.y = 0.06;
 
-    const geo = new THREE.CylinderGeometry(0.55, 0.55, 0.12, 16);
+    // Kantige, sechseckige Plattform statt runder Scheibe (chunky Low-Poly-Look)
+    const geo = new THREE.CylinderGeometry(0.55, 0.55, 0.12, 6);
     const mat = new THREE.MeshStandardMaterial({
       color: def.accent,
       emissive: def.accent,
-      emissiveIntensity: 0.5,
+      emissiveIntensity: 0.65,
+      roughness: 0.4,
+      metalness: 0.1,
       transparent: true,
       opacity: 0.85,
     });
@@ -580,6 +691,7 @@ export class WeaponSystem {
       const dmgResult = bot.takeDamage(dmg, isHead);
       const result = { hit: true, isHead, killed: dmgResult.killed, bot, damage: dmg, isBackstab };
       this.pendingEvents.push(result);
+      this._spawnImpactFX(hits[0], false);
       return result;
     }
     return { hit: false };
@@ -599,9 +711,10 @@ export class WeaponSystem {
     const velocity = dir.clone().multiplyScalar(def.throwSpeed);
     velocity.y += 3.5;
 
+    // Kantige, chunky Low-Poly-Form statt runder Kugel
     const mesh = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.14, 0),
-      new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.6 })
+      new THREE.OctahedronGeometry(0.16, 0),
+      new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.6, emissive: def.accent, emissiveIntensity: 0.35 })
     );
     mesh.position.copy(origin);
     this.scene.add(mesh);
@@ -614,10 +727,10 @@ export class WeaponSystem {
     const def = proj.def;
     const center = proj.mesh.position.clone();
 
-    // Effekt: expandierende, verblassende Kugel
-    const fxGeo = new THREE.SphereGeometry(1, 12, 8);
+    // Effekt: expandierender, verblassender Low-Poly-Kristall statt runder Kugel
+    const fxGeo = new THREE.IcosahedronGeometry(1, 0);
     const fxMat = new THREE.MeshBasicMaterial({
-      color: 0xffb347,
+      color: def.accent,
       transparent: true,
       opacity: 0.85,
       depthWrite: false,
@@ -731,6 +844,7 @@ export class WeaponSystem {
     const ammo = this.ammo[this.currentIndex];
     return {
       weaponName: def.name,
+      slotIndex: this.currentIndex,
       hasAmmo: !!ammo,
       mag: ammo ? ammo.mag : null,
       reserve: ammo ? ammo.reserve : null,
@@ -818,8 +932,12 @@ export class WeaponSystem {
     // Mündungsblitz ausblenden
     if (this.muzzleFlashTimer > 0) {
       this.muzzleFlashTimer -= dt;
-      if (this.muzzleFlashTimer <= 0) this.muzzleFlash.material.opacity = 0;
+      if (this.muzzleFlashTimer <= 0) {
+        this._muzzleCore.material.opacity = 0;
+        this._muzzleGlow.material.opacity = 0;
+      }
     }
+
 
     // Waffen-Bobbing/Sway
     if (moveState.isMoving && moveState.grounded) {
@@ -846,6 +964,16 @@ export class WeaponSystem {
       REST_ROT.y + swayX * 0.4,
       REST_ROT.z + this.meleeSwing * 0.6
     );
+
+    // Energie-Risse der aktuellen Waffe pulsieren lassen (rein optischer Skin-Layer)
+    this._crackTime = (this._crackTime || 0) + dt;
+    if (model.userData.cracks) {
+      for (const c of model.userData.cracks) {
+        const pulse = 0.5 + 0.5 * Math.sin(this._crackTime * c.speed + c.phase);
+        c.mesh.material.emissiveIntensity = 0.7 + pulse * 1.3;
+        c.mesh.material.opacity = 0.55 + pulse * 0.4;
+      }
+    }
 
     // Reload-Nicken
     if (this.reloading) {
@@ -912,6 +1040,16 @@ export class WeaponSystem {
         const p = 1 - Math.max(0, t.life) / t.maxLife;
         t.mesh.scale.setScalar(0.1 + p * t.maxScale);
         t.mesh.material.opacity = 0.85 * (1 - p);
+      } else if (t.isDecal) {
+        // Farbspritzer bleiben lange sichtbar und verblassen erst gegen Ende
+        const fadeStart = t.maxLife * 0.65;
+        t.mesh.material.opacity = t.life > fadeStart ? 0.92 : Math.max(0, t.life / fadeStart) * 0.92;
+      } else if (t.isHitIcon) {
+        // Kurzer, aufblitzender Hitmarker im Raum: wächst leicht und verblasst schnell
+        const p = 1 - Math.max(0, t.life) / t.maxLife;
+        t.mesh.scale.setScalar(0.6 + p * 1.4);
+        t.mesh.rotation.y += dt * 20;
+        t.mesh.material.opacity = Math.max(0, 1 - p);
       } else {
         t.mesh.material.opacity = Math.max(0, t.life / t.maxLife) * 0.9;
       }

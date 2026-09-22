@@ -8,6 +8,10 @@ schießende Bots, 90-Sekunden-Runden mit Scoreboard.
 Gebaut mit [Three.js](https://threejs.org/) (r160) über eine Import-Map direkt vom CDN geladen —
 kein Build-Schritt, keine externen 3D-Modelle, alles aus Primitives (Box/Plane/Zylinder) und Farben.
 
+**Optik:** helle, sterile Chunky-Low-Poly-Arenen mit prozeduralem Kachelraster auf Wänden/Boden,
+dunkle Waffen-Viewmodels mit pulsierendem Lila-Energie-Riss-Overlay, farbige Paintball-Treffer-Decals
+und ein dunkles, abgerundetes HUD mit kräftigen Akzentfarben — angelehnt an den Rivals-Look.
+
 ## Steuerung
 
 | Taste | Aktion |

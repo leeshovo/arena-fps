@@ -61,15 +61,22 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.05, 200);
+// Kamera muss Teil des Szenengraphs sein, damit an sie gehängte Objekte
+// (Waffen-Viewmodels, Mündungsblitz) beim Rendern überhaupt durchlaufen werden.
+scene.add(camera);
 
-const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8892a0, 0.9);
+// Helle, weiche, nahezu schattenlose Studio-Ausleuchtung (steril statt düster)
+const hemiLight = new THREE.HemisphereLight(0xffffff, 0xb9c2cc, 1.25);
 scene.add(hemiLight);
-const sunLight = new THREE.DirectionalLight(0xffffff, 1.05);
+const sunLight = new THREE.DirectionalLight(0xffffff, 0.65);
 sunLight.position.set(18, 30, 12);
 scene.add(sunLight);
-const fillLight = new THREE.DirectionalLight(0xffffff, 0.25);
-fillLight.position.set(-14, 12, -10);
+const fillLight = new THREE.DirectionalLight(0xffffff, 0.55);
+fillLight.position.set(-16, 14, -12);
 scene.add(fillLight);
+const fillLight2 = new THREE.DirectionalLight(0xffffff, 0.35);
+fillLight2.position.set(0, 10, -20);
+scene.add(fillLight2);
 
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
