@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ARENA FPS — Three.js Prototype</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+  <canvas id="game-canvas"></canvas>
+
+  <!-- ============ MAIN MENU ============ -->
+  <div id="main-menu" class="overlay">
+    <div class="menu-box">
+      <h1>ARENA <span class="accent">FPS</span></h1>
+      <p class="subtitle">Schnelles Low-Poly Arcade-Shooting — wähle eine Map</p>
+      <div id="map-list" class="map-list"></div>
+      <p class="hint">WASD Bewegen · Maus Umsehen · Leertaste Springen · Shift Sprint<br/>
+      LMB Schießen · 1-4 / Mausrad Waffenwechsel · R Nachladen · F Nahkampf · G Utility</p>
+    </div>
+  </div>
+
+  <!-- ============ HUD ============ -->
+  <div id="hud" class="hidden">
+    <div id="crosshair">
+      <span class="cross top"></span>
+      <span class="cross bottom"></span>
+      <span class="cross left"></span>
+      <span class="cross right"></span>
+      <div id="hitmarker"></div>
+    </div>
+
+    <div id="top-bar">
+      <div id="timer">01:30</div>
+      <div id="score"><span id="score-player">0</span> <span class="score-label">DU</span> &nbsp;—&nbsp; <span class="score-label">BOTS</span> <span id="score-bots">0</span></div>
+    </div>
+
+    <div id="killfeed"></div>
+
+    <div id="health-panel">
+      <div class="panel-label">HP</div>
+      <div id="health-bar-bg"><div id="health-bar-fill"></div></div>
+      <div id="health-text">100</div>
+    </div>
+
+    <div id="weapon-panel">
+      <div id="reload-indicator" class="hidden">NACHLADEN…</div>
+      <div id="weapon-name">Sturmgewehr</div>
+      <div id="ammo-text"><span id="ammo-mag">30</span> / <span id="ammo-reserve">90</span></div>
+    </div>
+
+    <div id="key-hints">
+      <div class="hint-item"><span class="key">F</span> Nahkampf <span id="melee-cd" class="cd-bar"><span class="cd-fill"></span></span></div>
+      <div class="hint-item"><span class="key">G</span> Utility <span id="utility-cd" class="cd-bar"><span class="cd-fill"></span></span></div>
+    </div>
+
+    <div id="damage-vignette"></div>
+    <div id="lock-hint" class="hidden">Klicken zum Fokussieren</div>
+  </div>
+
+  <!-- ============ DEATH SCREEN ============ -->
+  <div id="death-screen" class="overlay hidden">
+    <div class="menu-box small">
+      <h2>ELIMINIERT</h2>
+      <div id="killed-by"></div>
+      <div id="respawn-timer">Respawn in 3…</div>
+    </div>
+  </div>
+
+  <!-- ============ ROUND END SCREEN ============ -->
+  <div id="round-end-screen" class="overlay hidden">
+    <div class="menu-box">
+      <h2>RUNDE BEENDET</h2>
+      <div id="scoreboard"></div>
+      <button id="new-round-btn">Neue Runde</button>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
