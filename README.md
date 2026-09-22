@@ -52,8 +52,29 @@ kein Build-Schritt, keine externen 3D-Modelle, alles aus Primitives (Box/Plane/Z
   Sichtlinien-Raycast (kein Wallhack), verfolgen und schießen dann bewusst ungenau, suchen bei niedriger
   HP Deckung und respawnen nach kurzer Verzögerung.
 - **Runden:** 90 Sekunden Zeitlimit, Live-Score im HUD, danach Scoreboard mit „Neue Runde“.
-- **Maps:** Offene Arena (weite Sichtlinien), Deckungshof (Kisten & niedrige Mauern) und Korridore
-  (enge Gänge mit mehreren Kreuzungen) — Auswahl über ein Menü vor Rundenstart.
+- **Maps:** Offene Arena (Leicht, weite Sichtlinien), Deckungshof (Mittel, Kisten & niedrige Mauern) und
+  Korridore (Schwer, enge Gänge mit mehreren Kreuzungen) — mit Schwierigkeits-Badge, Auswahl über ein Menü
+  vor Rundenstart.
+
+## Spielmodi
+
+Vor jeder Runde lässt sich neben der Map auch ein Modus wählen:
+
+- **Duell:** der Standardmodus — Free-for-All gegen 4 Bots, 90 Sekunden, meiste Eliminationen zählen.
+- **Gun Game:** Waffen-Fortschrittsrennen. Start mit dem Sturmgewehr, jede Elimination schaltet die
+  nächste Waffe frei (Sturmgewehr → Pistole → Messer → Wurfladung) und sperrt gleichzeitig den freien
+  Waffenwechsel. Wer als Erstes mit der Wurfladung eliminiert, gewinnt die Runde sofort.
+- **Juggernaut:** Du bekommst 400 HP, bist dafür 15 % langsamer — die komplette Bot-Übermacht jagt dich.
+  Reines Überlebens-/Eliminations-Duell mit umgekehrten Kräfteverhältnissen.
+- **Swift Standoff:** Alle (Spieler *und* Bots) haben nur 1 HP — jeder Treffer eliminiert sofort. Hektisches
+  Kurzrunden-Chaos.
+- **Chicken Game:** Rotlicht/Grünlicht. Die Phase wechselt unregelmäßig zwischen Grün (normales Spiel) und
+  Rot (alles friert ein — Bots pausieren). Wer sich bei Rot bewegt, schießt oder zielt, wird sofort
+  eliminiert; die Bots respektieren die Ampel ebenfalls.
+
+**Nicht nachgebaut** (brauchen echtes Multiplayer/Accounts, die dieser Solo-vs-Bots-Prototyp nicht hat):
+Ranked, Party/Matchmaking, Team Deathmatch mit echten Teams, Head Honcho, Zombie Tower, Spleef,
+Hardcore Parkour und die übrigen ~15 weiteren Rivals-Modi.
 
 Bewegung, Waffenbalance und Rechtsklick-Fähigkeiten orientieren sich an [Roblox Rivals](https://robloxrivals.fandom.com/wiki/Roblox_Rivals_Wiki)
 (Slide-Jump-Tech, Move-Speed-Modifier pro Waffe, M2-Fähigkeiten statt ADS, 1,25×-Kopfschuss-Multiplikator,

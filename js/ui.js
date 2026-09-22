@@ -7,8 +7,12 @@ export function initUI() {
   els = {
     mainMenu: document.getElementById("main-menu"),
     mobileNotice: document.getElementById("mobile-notice"),
+    modeList: document.getElementById("mode-list"),
     mapList: document.getElementById("map-list"),
     hud: document.getElementById("hud"),
+    modeBanner: document.getElementById("mode-banner"),
+    chickenBanner: document.getElementById("chicken-banner"),
+    chickenPhaseText: document.getElementById("chicken-phase-text"),
     crosshair: document.getElementById("crosshair"),
     crossTop: document.querySelector(".cross.top"),
     crossBottom: document.querySelector(".cross.bottom"),
@@ -33,24 +37,56 @@ export function initUI() {
     killedBy: document.getElementById("killed-by"),
     respawnTimer: document.getElementById("respawn-timer"),
     roundEndScreen: document.getElementById("round-end-screen"),
+    roundEndTitle: document.getElementById("round-end-title"),
     scoreboard: document.getElementById("scoreboard"),
     newRoundBtn: document.getElementById("new-round-btn"),
   };
 }
 
-export function showMainMenu(maps, onSelect) {
+const DIFFICULTY_LABEL = { easy: "Leicht", medium: "Mittel", hard: "Schwer" };
+
+let selectedModeId = null;
+
+/** @param {object[]} modes @param {object[]} maps @param {(map, mode) => void} onSelect */
+export function showMainMenu(maps, modes, onSelect) {
   els.mainMenu.classList.remove("hidden");
+
+  if (!selectedModeId || !modes.some((mo) => mo.id === selectedModeId)) {
+    selectedModeId = modes[0].id;
+  }
+
+  els.modeList.innerHTML = "";
+  for (const mode of modes) {
+    const card = document.createElement("div");
+    card.className = "mode-card" + (mode.id === selectedModeId ? " selected" : "");
+    card.innerHTML = `
+      <div class="mode-name">${mode.name}</div>
+      <div class="mode-desc">${mode.description}</div>
+    `;
+    card.addEventListener("click", () => {
+      selectedModeId = mode.id;
+      els.modeList.querySelectorAll(".mode-card").forEach((c) => c.classList.remove("selected"));
+      card.classList.add("selected");
+    });
+    els.modeList.appendChild(card);
+  }
+
   els.mapList.innerHTML = "";
   for (const m of maps) {
     const card = document.createElement("div");
     card.className = "map-card";
     const accentHex = "#" + m.accent.toString(16).padStart(6, "0");
+    const diffLabel = DIFFICULTY_LABEL[m.difficulty] || "";
     card.innerHTML = `
+      <div class="difficulty-badge ${m.difficulty}">${diffLabel}</div>
       <div class="swatch" style="background:${accentHex}"></div>
       <div class="name">${m.name}</div>
       <div class="desc">${m.description}</div>
     `;
-    card.addEventListener("click", () => onSelect(m));
+    card.addEventListener("click", () => {
+      const mode = modes.find((mo) => mo.id === selectedModeId) || modes[0];
+      onSelect(m, mode);
+    });
     els.mapList.appendChild(card);
   }
 }
@@ -158,6 +194,23 @@ export function setScore(playerScore, botsScore) {
   els.scoreBots.textContent = botsScore;
 }
 
+export function setModeBanner(text) {
+  if (!text) {
+    els.modeBanner.classList.add("hidden");
+    return;
+  }
+  els.modeBanner.textContent = text;
+  els.modeBanner.classList.remove("hidden");
+}
+
+export function setChickenBanner(visible, phase, subText) {
+  els.chickenBanner.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  els.chickenBanner.classList.toggle("phase-red", phase === "red");
+  els.chickenPhaseText.textContent = phase === "red" ? "ROT" : "GRÜN";
+  if (subText) document.getElementById("chicken-sub").textContent = subText;
+}
+
 export function showDeathScreen(killerName) {
   els.killedBy.textContent = killerName ? `Eliminiert von ${killerName}` : "";
   els.deathScreen.classList.remove("hidden");
@@ -169,7 +222,8 @@ export function hideDeathScreen() {
   els.deathScreen.classList.add("hidden");
 }
 
-export function showRoundEnd(playerScore, botsScore, botStats, onRestart) {
+export function showRoundEnd(playerScore, botsScore, botStats, onRestart, title = "RUNDE BEENDET") {
+  els.roundEndTitle.textContent = title;
   els.scoreboard.innerHTML = `
     <div class="row header"><span>SPIELER</span><span>ELIMS</span></div>
     <div class="row you"><span>Du</span><span>${playerScore}</span></div>

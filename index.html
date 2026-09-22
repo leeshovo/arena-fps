@@ -19,6 +19,9 @@
         Dieses Spiel braucht Maus &amp; Tastatur (Pointer Lock) und läuft nicht auf dem Handy/Tablet —
         bitte auf einem PC/Laptop öffnen.
       </div>
+      <div class="section-label">Spielmodus</div>
+      <div id="mode-list" class="mode-list"></div>
+      <div class="section-label">Map</div>
       <div id="map-list" class="map-list"></div>
       <p class="hint">WASD Bewegen · Maus Umsehen · Leertaste Springen · Shift Sprint · Strg/C Slide (+Sprung = Slide-Jump)<br/>
       LMB Schießen · 1-4 / Mausrad Waffenwechsel · R Nachladen · F Nahkampf · G Utility<br/>
@@ -37,8 +40,14 @@
     </div>
 
     <div id="top-bar">
+      <div id="mode-banner" class="hidden"></div>
       <div id="timer">01:30</div>
       <div id="score"><span id="score-player">0</span> <span class="score-label">DU</span> &nbsp;—&nbsp; <span class="score-label">BOTS</span> <span id="score-bots">0</span></div>
+    </div>
+
+    <div id="chicken-banner" class="hidden">
+      <div id="chicken-phase-text">GRÜN</div>
+      <div id="chicken-sub">Bei Rot: nicht bewegen oder schießen!</div>
     </div>
 
     <div id="killfeed"></div>
@@ -76,7 +85,7 @@
   <!-- ============ ROUND END SCREEN ============ -->
   <div id="round-end-screen" class="overlay hidden">
     <div class="menu-box">
-      <h2>RUNDE BEENDET</h2>
+      <h2 id="round-end-title">RUNDE BEENDET</h2>
       <div id="scoreboard"></div>
       <button id="new-round-btn">Neue Runde</button>
     </div>

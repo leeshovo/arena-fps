@@ -1,7 +1,7 @@
 // main.js — Einstiegspunkt: Rendering-Setup, Input-Handling, Game-Loop, Rundensteuerung.
 import * as THREE from "three";
 import { MAPS, buildMap, disposeMap } from "./maps.js";
-import { Player } from "./player.js";
+import { Player, MAX_HP as PLAYER_DEFAULT_MAX_HP } from "./player.js";
 import { WeaponSystem, SLOT } from "./weapons.js";
 import { createBots, disposeBots } from "./bots.js";
 import * as UI from "./ui.js";
@@ -9,6 +9,49 @@ import * as UI from "./ui.js";
 const ROUND_DURATION = 90;
 const BOT_COUNT = 4;
 const BASE_FOV = 78;
+
+// --- Spielmodi (an Roblox Rivals angelehnt, an das feste 4-Waffen-Loadout angepasst) -------------
+const MODES = [
+  {
+    id: "normal",
+    name: "Duell",
+    description: "Klassisches Free-for-All gegen Bots, 90 Sekunden.",
+  },
+  {
+    id: "gungame",
+    name: "Gun Game",
+    description: "Jede Elimination schaltet die nächste Waffe frei. Alle 4 durch = Sieg.",
+    lockWeaponProgression: true,
+  },
+  {
+    id: "juggernaut",
+    name: "Juggernaut",
+    description: "400 HP, aber langsamer. Überlebe die Bot-Übermacht.",
+    playerMaxHp: 400,
+    playerSpeedMult: 0.85,
+  },
+  {
+    id: "swift",
+    name: "Swift Standoff",
+    description: "1 HP für alle. Ein Treffer = eliminiert.",
+    playerMaxHp: 1,
+    botMaxHp: 1,
+  },
+  {
+    id: "chicken",
+    name: "Chicken Game",
+    description: "Rotlicht/Grünlicht: bei Rot nicht bewegen oder schießen!",
+  },
+];
+
+function randomRange(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+/** true, wenn beim Chicken Game gerade Rotlicht ist (jede Aktion = sofortiges Aus). */
+function isChickenRedViolation() {
+  return roundActive && currentMode.id === "chicken" && chickenPhase === "red" && player.alive;
+}
 
 // --- Renderer / Szene / Kamera ---------------------------------------------------------
 const canvas = document.getElementById("game-canvas");
@@ -46,6 +89,12 @@ let roundTimeLeft = ROUND_DURATION;
 let roundActive = false;
 let deathRespawnTimer = 0;
 
+// Modus-Status
+let currentMode = MODES[0];
+let gunGameStage = 0; // 0=Gewehr,1=Pistole,2=Messer,3=Utility -> entspricht SLOT-Werten
+let chickenPhase = "green";
+let chickenTimer = 0;
+
 // --- Input ---------------------------------------------------------------------------
 const keys = { forward: false, back: false, left: false, right: false, jump: false, sprint: false, slide: false };
 
@@ -73,8 +122,13 @@ window.addEventListener("keydown", (e) => {
   else if (e.code === "Digit3") trySwitchWeapon(() => weapons.switchTo(SLOT.MELEE));
   else if (e.code === "Digit4") trySwitchWeapon(() => weapons.switchTo(SLOT.UTILITY));
   else if (e.code === "KeyR") weapons.reload();
-  else if (e.code === "KeyF") weapons.meleeAttack(bots);
-  else if (e.code === "KeyG") weapons.throwUtility();
+  else if (e.code === "KeyF") {
+    if (isChickenRedViolation()) return killPlayerInstant("Vom Rotlicht erwischt!");
+    if (!currentMode.lockWeaponProgression || gunGameStage === SLOT.MELEE) weapons.meleeAttack(bots);
+  } else if (e.code === "KeyG") {
+    if (isChickenRedViolation()) return killPlayerInstant("Vom Rotlicht erwischt!");
+    if (!currentMode.lockWeaponProgression || gunGameStage === SLOT.UTILITY) weapons.throwUtility();
+  }
 });
 
 window.addEventListener("keyup", (e) => {
@@ -87,6 +141,7 @@ canvas.addEventListener("mousedown", (e) => {
     return;
   }
   if (!player.alive) return;
+  if (isChickenRedViolation()) return killPlayerInstant("Vom Rotlicht erwischt!");
   if (e.button === 0) weapons.startFire();
   else if (e.button === 2) {
     // Rechtsklick: Zielen (ADS) beim Sturmgewehr (halten), sonst Einzel-Fähigkeit (Fächerschuss/Heavy)
@@ -125,6 +180,7 @@ canvas.addEventListener("contextmenu", (e) => e.preventDefault());
  * auf eine leichte Waffe (Pistole/Messer), gibt es einen Extra-Sprung — pro Waffe nur einmal pro Sprung.
  */
 function trySwitchWeapon(switchFn) {
+  if (currentMode.lockWeaponProgression) return; // Gun Game: Waffe wird nur per Elimination freigeschaltet
   if (!switchFn()) return;
   const def = weapons.currentDef();
   if (def.grantsAirJump && !player.grounded && player.alive && player.canUseSwapJump(def.id)) {
@@ -134,11 +190,16 @@ function trySwitchWeapon(switchFn) {
 }
 
 // --- Rundensteuerung -------------------------------------------------------------------
-function startRound(mapDef) {
+function startRound(mapDef, modeDef = MODES[0]) {
   if (currentMapData) {
     disposeMap(scene, currentMapData);
     disposeBots(scene, bots);
   }
+
+  currentMode = modeDef;
+  gunGameStage = 0;
+  chickenPhase = "green";
+  chickenTimer = randomRange(3, 5);
 
   currentMapData = buildMap(scene, mapDef);
   weapons.setWallMeshes(currentMapData.wallMeshes);
@@ -146,7 +207,14 @@ function startRound(mapDef) {
 
   bots = createBots(scene, BOT_COUNT, currentMapData);
   botKillCounts = new Map(bots.map((b) => [b.id, 0]));
+  if (modeDef.botMaxHp) {
+    for (const b of bots) {
+      b.maxHp = modeDef.botMaxHp;
+      b.hp = modeDef.botMaxHp;
+    }
+  }
 
+  player.maxHp = modeDef.playerMaxHp || PLAYER_DEFAULT_MAX_HP;
   const spawn = currentMapData.spawnPoints[Math.floor(Math.random() * currentMapData.spawnPoints.length)];
   player.spawn(spawn);
   scene.add(player.hitMesh);
@@ -160,24 +228,59 @@ function startRound(mapDef) {
   UI.hideRoundEnd();
   UI.hideDeathScreen();
   UI.showHud();
+  UI.setChickenBanner(modeDef.id === "chicken", chickenPhase);
 
   player.requestLock();
 }
 
-function endRound() {
+function getModeBannerText() {
+  switch (currentMode.id) {
+    case "gungame":
+      return `GUN GAME — Waffe ${gunGameStage + 1}/4`;
+    case "juggernaut":
+      return "JUGGERNAUT — überlebe die Bot-Übermacht";
+    case "swift":
+      return "SWIFT STANDOFF — 1 HP für alle";
+    default:
+      return null;
+  }
+}
+
+function endRound(title) {
   roundActive = false;
   weapons.stopFire();
+  weapons.setAiming(false);
   if (document.pointerLockElement === canvas) document.exitPointerLock();
 
   const botStats = bots.map((b) => ({ name: b.name, kills: botKillCounts.get(b.id) || 0 }));
-  UI.showRoundEnd(score.player, score.bots, botStats, () => {
-    disposeMap(scene, currentMapData);
-    disposeBots(scene, bots);
-    currentMapData = null;
-    bots = [];
-    UI.hideHud();
-    UI.showMainMenu(MAPS, startRound);
-  });
+  UI.showRoundEnd(
+    score.player,
+    score.bots,
+    botStats,
+    () => {
+      disposeMap(scene, currentMapData);
+      disposeBots(scene, bots);
+      currentMapData = null;
+      bots = [];
+      UI.hideHud();
+      UI.showMainMenu(MAPS, MODES, startRound);
+    },
+    title
+  );
+}
+
+/** Sofortiges Aus ohne Schadenswert (Chicken-Game-Regelverstoß). */
+function killPlayerInstant(reason) {
+  if (!player.alive) return;
+  UI.flashDamage();
+  player.hp = 0;
+  player.alive = false;
+  weapons.stopFire();
+  weapons.setAiming(false);
+  deathRespawnTimer = 3;
+  UI.showDeathScreen(reason);
+  score.bots += 1;
+  UI.addKillFeed(reason, true);
 }
 
 function handlePlayerDamage(amount, attackerBot) {
@@ -209,8 +312,8 @@ function animate() {
   if (roundActive) {
     if (player.alive) {
       const recoilPitch = weapons.getRecoilPitch();
-      const weaponSpeedMult = weapons.getMoveSpeedMultiplier();
-      player.update(dt, keys, currentMapData.wallBoxes, currentMapData.bounds, recoilPitch, weaponSpeedMult);
+      const speedMult = weapons.getMoveSpeedMultiplier() * (currentMode.playerSpeedMult || 1);
+      player.update(dt, keys, currentMapData.wallBoxes, currentMapData.bounds, recoilPitch, speedMult);
     }
 
     const moveState = { isMoving: player.isMoving, isSprinting: player.isSprinting, grounded: player.grounded };
@@ -236,16 +339,45 @@ function animate() {
           score.player += 1;
           const how = ev.isBackstab ? " (Backstab)" : ev.isExplosion ? " (Wurfladung)" : ev.isHead ? " (Kopfschuss)" : "";
           UI.addKillFeed(`Du hast ${ev.bot.name} eliminiert${how}`, false);
+
+          if (currentMode.id === "gungame") {
+            gunGameStage += 1;
+            if (gunGameStage >= 4) {
+              endRound("GUN GAME GEWONNEN!");
+            } else {
+              weapons.switchTo(gunGameStage);
+            }
+          }
         }
       }
     }
 
-    // Bots aktualisieren
-    for (const bot of bots) {
-      const botEvents = bot.update(dt, player, currentMapData.wallBoxes, currentMapData.wallMeshes, currentMapData.bounds);
-      for (const ev of botEvents) {
-        if (ev.type === "hitPlayer") {
-          handlePlayerDamage(ev.amount, bot);
+    // Chicken Game: Rotlicht/Grünlicht — bei Rot friert alles ein, Bewegung/Schuss = sofortiges Aus
+    if (currentMode.id === "chicken" && player.alive) {
+      chickenTimer -= dt;
+      if (chickenTimer <= 0) {
+        chickenPhase = chickenPhase === "green" ? "red" : "green";
+        chickenTimer = chickenPhase === "red" ? randomRange(2, 4) : randomRange(3, 5);
+      }
+      UI.setChickenBanner(true, chickenPhase);
+
+      if (isChickenRedViolation()) {
+        const moving = keys.forward || keys.back || keys.left || keys.right || keys.jump || keys.slide;
+        if (moving || weapons.triggerHeld || weapons.aiming) {
+          killPlayerInstant("Vom Rotlicht erwischt!");
+        }
+      }
+    }
+    const botsFrozen = currentMode.id === "chicken" && chickenPhase === "red";
+
+    // Bots aktualisieren (beim Chicken Game während Rot eingefroren)
+    if (!botsFrozen) {
+      for (const bot of bots) {
+        const botEvents = bot.update(dt, player, currentMapData.wallBoxes, currentMapData.wallMeshes, currentMapData.bounds);
+        for (const ev of botEvents) {
+          if (ev.type === "hitPlayer") {
+            handlePlayerDamage(ev.amount, bot);
+          }
         }
       }
     }
@@ -275,6 +407,7 @@ function animate() {
     UI.setCooldowns(hud.meleeCooldownPct, hud.utilityCooldownPct);
     UI.setAiming(hud.aiming);
     UI.setCrosshairSpread(hud.spread);
+    UI.setModeBanner(getModeBannerText());
     UI.setTimer(roundTimeLeft);
     UI.setScore(score.player, score.bots);
     UI.setLockHintVisible(!player.isLocked);
@@ -289,5 +422,5 @@ UI.initUI();
 if (window.matchMedia("(pointer: coarse)").matches) {
   UI.setMobileNotice(true);
 }
-UI.showMainMenu(MAPS, startRound);
+UI.showMainMenu(MAPS, MODES, startRound);
 animate();
