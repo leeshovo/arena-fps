@@ -87,6 +87,17 @@ html, body {
   line-height: 1.8;
 }
 
+#mobile-notice {
+  background: rgba(255, 107, 74, 0.12);
+  border: 1px solid rgba(255, 107, 74, 0.4);
+  color: #ffcabb;
+  border-radius: 8px;
+  padding: 10px 16px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  margin-bottom: 20px;
+}
+
 .map-list {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

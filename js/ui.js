@@ -6,6 +6,7 @@ let els = {};
 export function initUI() {
   els = {
     mainMenu: document.getElementById("main-menu"),
+    mobileNotice: document.getElementById("mobile-notice"),
     mapList: document.getElementById("map-list"),
     hud: document.getElementById("hud"),
     crosshair: document.getElementById("crosshair"),
@@ -56,6 +57,10 @@ export function showMainMenu(maps, onSelect) {
 
 export function hideMainMenu() {
   els.mainMenu.classList.add("hidden");
+}
+
+export function setMobileNotice(visible) {
+  els.mobileNotice.classList.toggle("hidden", !visible);
 }
 
 export function showHud() {

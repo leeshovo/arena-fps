@@ -243,5 +243,9 @@ function animate() {
 
 // --- Start ---------------------------------------------------------------------------
 UI.initUI();
+// Touch-Primärgeräte (Handy/Tablet) unterstützen kein Pointer Lock/WASD — nur Hinweis, kein Blocker.
+if (window.matchMedia("(pointer: coarse)").matches) {
+  UI.setMobileNotice(true);
+}
 UI.showMainMenu(MAPS, startRound);
 animate();
