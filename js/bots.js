@@ -337,13 +337,16 @@ export class Bot {
    * @param {Bot[]} allBots alle Bots der Runde (für Team-Kämpfe)
    * @param {THREE.Box3[]} wallBoxes @param {THREE.Object3D[]} wallMeshes @param {object} bounds
    * @param {Array} smokeVolumes aktive Rauchwolken [{position, radius}]
+   * @param {boolean} allowRespawn false in Bo5-Eliminationsrunden: bleibt bis zur nächsten Runde tot
    */
-  update(dt, player, allBots, wallBoxes, wallMeshes, bounds, smokeVolumes = []) {
+  update(dt, player, allBots, wallBoxes, wallMeshes, bounds, smokeVolumes = [], allowRespawn = true) {
     const events = [];
 
     if (this.dead) {
-      this.respawnTimer -= dt;
-      if (this.respawnTimer <= 0) this.respawnAt();
+      if (allowRespawn) {
+        this.respawnTimer -= dt;
+        if (this.respawnTimer <= 0) this.respawnAt();
+      }
       return events;
     }
 

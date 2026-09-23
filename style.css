@@ -316,53 +316,6 @@ button#new-round-btn:hover { transform: translateY(-2px); background: #7fdcff; }
   text-shadow: 0 2px 6px rgba(0,0,0,0.8);
 }
 
-#timer {
-  display: inline-block;
-  font-size: 24px;
-  font-weight: 900;
-  letter-spacing: 1px;
-  color: #fff;
-  background: var(--panel-bg-strong);
-  border-radius: var(--panel-radius);
-  padding: 6px 20px;
-}
-#score {
-  margin-top: 2px;
-  font-size: 13px;
-  color: #cfe0ef;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
-}
-#score-player { color: var(--good); font-weight: 800; }
-#score-bots { color: var(--bad); font-weight: 800; }
-.score-label { font-size: 10px; color: #7f8ea1; letter-spacing: 1px; }
-
-#chicken-banner {
-  position: absolute;
-  top: 76px;
-  left: 50%;
-  transform: translateX(-50%);
-  text-align: center;
-  padding: 8px 26px;
-  border-radius: 8px;
-  background: rgba(10,14,20,0.7);
-  border: 2px solid var(--good);
-  transition: border-color .25s ease;
-}
-#chicken-banner.phase-red { border-color: var(--bad); }
-#chicken-phase-text {
-  font-size: 20px;
-  font-weight: 900;
-  letter-spacing: 3px;
-  color: var(--good);
-  transition: color .25s ease;
-}
-#chicken-banner.phase-red #chicken-phase-text { color: var(--bad); }
-#chicken-sub {
-  font-size: 10px;
-  color: #b9c4d0;
-  margin-top: 2px;
-}
-
 #killfeed {
   position: absolute;
   top: 18px;
@@ -782,3 +735,120 @@ button#new-round-btn:hover { transform: translateY(-2px); background: #7fdcff; }
 }
 .unlock-chip.challenge-complete { background: rgba(107,255,142,0.1); border-left-color: var(--good); }
 .unlock-type { font-weight: 800; text-transform: uppercase; font-size: 9px; color: var(--accent); margin-right: 4px; }
+
+/* ---------- Rang-Badge & Bestenliste ---------- */
+#rank-badge {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  background: linear-gradient(90deg, rgba(184,77,255,0.14), rgba(255,138,61,0.1));
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 8px 14px;
+  margin-bottom: 14px;
+}
+#rank-name { font-weight: 900; font-size: 14px; letter-spacing: 0.5px; }
+#rank-sr { font-size: 10.5px; color: #9aa8b8; }
+
+.menu-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  text-align: left;
+}
+.menu-col { min-width: 0; }
+
+.leaderboard-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lb-empty { font-size: 11px; color: #7f8ea1; padding: 8px 0; }
+.lb-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--panel-border);
+  border-left: 3px solid var(--good);
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-size: 10.5px;
+}
+.lb-row.loss { border-left-color: var(--bad); }
+.lb-result { font-weight: 800; font-size: 9.5px; letter-spacing: 0.5px; }
+.lb-row.win .lb-result { color: var(--good); }
+.lb-row.loss .lb-result { color: var(--bad); }
+.lb-mode { color: #9aa8b8; }
+.lb-delta { font-weight: 700; }
+.lb-total { color: #7f8ea1; }
+
+.loadout-tier-hint { font-size: 10px; color: #9aa8b8; margin-top: 6px; }
+
+/* ---------- Modus-Auswahl: Gewertet-Toggle ---------- */
+#ranked-toggle-wrap { margin: 10px 0; text-align: left; }
+#ranked-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #cfd6dc;
+  cursor: pointer;
+}
+#ranked-toggle { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; }
+
+/* ---------- HUD: Best-of-5-Rundenpips ---------- */
+#round-pips {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 6px;
+}
+.pip { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); }
+.pip.filled.blue { background: var(--good); border-color: var(--good); }
+.pip.filled.red { background: var(--bad); border-color: var(--bad); }
+.pip-gap { width: 8px; }
+
+/* ---------- HUD: Rundenbanner (Intermission/Countdown zwischen Runden) ---------- */
+#round-banner {
+  position: absolute;
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  background: var(--panel-bg-strong);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 18px 32px;
+}
+#round-banner-title { font-size: 22px; font-weight: 900; letter-spacing: 1px; color: var(--accent); }
+#round-banner-score { font-size: 14px; color: #cfd6dc; margin-top: 4px; }
+#round-banner-countdown { font-size: 13px; color: var(--accent-2); margin-top: 8px; font-weight: 700; }
+
+/* ---------- HUD: Scoreboard-Overlay (Tab gedrückt halten) ---------- */
+#scoreboard-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 18px;
+  background: var(--panel-bg-strong);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  padding: 16px 20px;
+  min-width: 420px;
+}
+.sb-team { flex: 1; }
+.sb-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 14px;
+  padding: 5px 4px;
+  font-size: 12.5px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.sb-row.header { color: #7f8ea1; font-size: 10.5px; letter-spacing: 1px; border-bottom: 1px solid rgba(255,255,255,0.2); }
+.sb-row.you { color: var(--good); font-weight: 800; }

@@ -195,6 +195,24 @@ export function playRespawn() {
   osc.stop(t + 0.3);
 }
 
+/** Kurzer aufsteigender Whoosh für den Dash. */
+export function playDash() {
+  const c = ensureContext();
+  if (!c) return;
+  const t = c.currentTime;
+  const src = noiseSource();
+  const filter = c.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.setValueAtTime(500, t);
+  filter.frequency.exponentialRampToValueAtTime(2200, t + 0.14);
+  const g = envGain(0.3, 0.001, 0.16);
+  src.connect(filter);
+  filter.connect(g);
+  g.connect(masterGain);
+  src.start(t);
+  src.stop(t + 0.17);
+}
+
 export function playJump() {
   const c = ensureContext();
   if (!c) return;

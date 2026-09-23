@@ -1,23 +1,25 @@
 // save.js — Zentrales Save-System: eine JSON-Struktur in localStorage, die Progression,
-// Loadout und Challenges gemeinsam nutzen. Andere Module lesen/schreiben über diese Datei.
+// Loadout, Rang und Aufträge gemeinsam nutzen. Andere Module lesen/schreiben über diese Datei.
 
-const SAVE_KEY = "arenafps_save_v1";
+const SAVE_KEY = "kineticbreach_save_v1";
 
 function defaultSave() {
   return {
-    version: 1,
+    version: 2,
     xp: 0,
     level: 1,
     currency: 150, // kleiner Startbonus, damit im Loadout sofort etwas zu holen ist
-    unlockedItems: ["rifle_ar", "pistol_std", "melee_knife", "utility_grenade", "skin_default"],
+    unlockedItems: ["rifle_ar", "pistol_std", "melee_knife", "utility_grenade"],
     loadout: {
       primary: "rifle_ar",
       secondary: "pistol_std",
       melee: "melee_knife",
       utility: "utility_grenade",
-      skins: { primary: "skin_default", secondary: "skin_default", melee: "skin_default", utility: "skin_default" },
+      tiers: { primary: 0, secondary: 0, melee: 0, utility: 0 },
     },
-    challenges: { active: [], completedCount: 0 },
+    aufträge: { active: [], completedCount: 0 },
+    rang: { sr: 0, winStreak: 0 },
+    bestenliste: [], // lokales Leaderboard: die letzten Ranglisten-Matches
     stats: {
       matchesPlayed: 0,
       eliminations: 0,
@@ -27,6 +29,8 @@ function defaultSave() {
       backstabs: 0,
       utilityKills: 0,
       assists: 0,
+      shotsFired: 0,
+      shotsHit: 0,
     },
   };
 }
@@ -38,8 +42,10 @@ function mergeWithDefaults(loaded) {
   return {
     ...base,
     ...loaded,
-    loadout: { ...base.loadout, ...(loaded.loadout || {}), skins: { ...base.loadout.skins, ...((loaded.loadout || {}).skins || {}) } },
-    challenges: { ...base.challenges, ...(loaded.challenges || {}) },
+    loadout: { ...base.loadout, ...(loaded.loadout || {}), tiers: { ...base.loadout.tiers, ...((loaded.loadout || {}).tiers || {}) } },
+    aufträge: { ...base.aufträge, ...(loaded.aufträge || {}) },
+    rang: { ...base.rang, ...(loaded.rang || {}) },
+    bestenliste: Array.isArray(loaded.bestenliste) ? loaded.bestenliste : base.bestenliste,
     stats: { ...base.stats, ...(loaded.stats || {}) },
     unlockedItems: Array.isArray(loaded.unlockedItems) ? loaded.unlockedItems : base.unlockedItems,
   };

@@ -1,4 +1,4 @@
-// maps.js — Arena-Definitionen, Geometrie-Erzeugung und Kollisions-/Sichtlinien-Hilfsfunktionen.
+// maps.js — 6 Arena-Definitionen, Geometrie-Erzeugung und Kollisions-/Sichtlinien-Hilfsfunktionen.
 import * as THREE from "three";
 
 const WALL_HEIGHT_TALL = 4.5;
@@ -60,7 +60,7 @@ function boundaryWalls(half, color, thickness = 1) {
 }
 
 // ---------------------------------------------------------------------------
-// MAP 1: Offene Arena mit ein paar hohen Blöcken als Sichtschutz
+// MAP 1: Offene helle Arena — weite Sichtlinien, wenige hohe Deckungen
 // ---------------------------------------------------------------------------
 const arenaHalf1 = 26;
 const map1 = {
@@ -100,108 +100,264 @@ const map1 = {
 };
 
 // ---------------------------------------------------------------------------
-// MAP 2: Mehr Deckungsobjekte (Kisten, niedrige Mauern) für taktisches Spiel
+// MAP 2: Stillwerk — liminaler, leerer Innenraum. Acht identische, nach innen offene
+// Raum-Module um eine leere Mitte, gelbliches Licht, surreale Endlos-Stimmung.
 // ---------------------------------------------------------------------------
+function stillwerkModules(color) {
+  const walls = [];
+  const h = WALL_HEIGHT_TALL;
+  const ring = 15.5;
+  const half = 3.5;
+  const positions = [
+    [-1, -1], [0, -1], [1, -1],
+    [-1, 0], [1, 0],
+    [-1, 1], [0, 1], [1, 1],
+  ];
+  for (const [gx, gz] of positions) {
+    const cx = gx * ring;
+    const cz = gz * ring;
+    if (gx === 0) {
+      // Nord/Süd-Modul: Rückwand auf der zentrumsfernen Seite, offen Richtung Mitte
+      walls.push(box(cx, h / 2, cz + gz * half, 7, h, 0.4, color));
+      walls.push(box(cx - half, h / 2, cz, 0.4, h, 7, color));
+      walls.push(box(cx + half, h / 2, cz, 0.4, h, 7, color));
+    } else if (gz === 0) {
+      // Ost/West-Modul: Rückwand auf der zentrumsfernen Seite, offen Richtung Mitte
+      walls.push(box(cx + gx * half, h / 2, cz, 0.4, h, 7, color));
+      walls.push(box(cx, h / 2, cz - half, 7, h, 0.4, color));
+      walls.push(box(cx, h / 2, cz + half, 7, h, 0.4, color));
+    } else {
+      // Eck-Modul: L-Form aus zwei zentrumsfernen Wänden, offen Richtung Mitte
+      walls.push(box(cx, h / 2, cz + gz * half, 7, h, 0.4, color));
+      walls.push(box(cx + gx * half, h / 2, cz, 0.4, h, 7, color));
+    }
+  }
+  return walls;
+}
 const arenaHalf2 = 24;
 const map2 = {
-  id: "coveryard",
-  name: "Deckungshof",
-  description: "Kisten & niedrige Mauern, taktischer",
+  id: "stillwerk",
+  name: "Stillwerk",
+  description: "Endlose, identische Räume — gelbliches Licht, unheimliche Stille",
   difficulty: "medium",
-  accent: 0xff6b4a,
-  groundColor: 0xe3e7ec,
+  accent: 0xd9c24f,
+  groundColor: 0xe4dcc0,
   groundHalf: arenaHalf2,
-  skyColor: 0xdfe9f0,
-  fogColor: 0xdfe9f0,
-  fogNear: 35,
-  fogFar: 85,
+  skyColor: 0xcdbf8f,
+  fogColor: 0xcdbf8f,
+  fogNear: 20,
+  fogFar: 55,
   walls: [
-    ...boundaryWalls(arenaHalf2, 0x9fb4c9),
-    // Kisten-Cluster
-    box(6, 1, 6, 2, 2, 2, 0xff6b4a),
-    box(9, 1, 6, 2, 2, 2, 0xffa066),
-    box(6, 1, 9, 2, 2, 2, 0xffa066),
-    box(-7, 1, -7, 2, 2, 2, 0xff6b4a),
-    box(-10, 1, -7, 2, 2, 2, 0xffa066),
-    box(-7, 1, -10, 2, 2, 2, 0xffa066),
-    // Niedrige Mauern
-    box(0, WALL_HEIGHT_LOW / 2, 4, 8, WALL_HEIGHT_LOW, 1, 0x4fd1ff),
-    box(0, WALL_HEIGHT_LOW / 2, -4, 8, WALL_HEIGHT_LOW, 1, 0x4fd1ff),
-    box(12, WALL_HEIGHT_LOW / 2, 0, 1, WALL_HEIGHT_LOW, 10, 0x4fd1ff),
-    box(-12, WALL_HEIGHT_LOW / 2, 0, 1, WALL_HEIGHT_LOW, 10, 0x4fd1ff),
-    // Ein paar hohe Blöcke als Sichtschutz an den Ecken
-    box(16, WALL_HEIGHT_TALL / 2, 16, 3, WALL_HEIGHT_TALL, 3, 0xff6b4a),
-    box(-16, WALL_HEIGHT_TALL / 2, 16, 3, WALL_HEIGHT_TALL, 3, 0xff6b4a),
-    box(16, WALL_HEIGHT_TALL / 2, -16, 3, WALL_HEIGHT_TALL, 3, 0xff6b4a),
-    box(-16, WALL_HEIGHT_TALL / 2, -16, 3, WALL_HEIGHT_TALL, 3, 0xff6b4a),
-    box(0, WALL_HEIGHT_LOW / 2, 16, 6, WALL_HEIGHT_LOW, 1, 0x4fd1ff),
-    box(0, WALL_HEIGHT_LOW / 2, -16, 6, WALL_HEIGHT_LOW, 1, 0x4fd1ff),
+    ...boundaryWalls(arenaHalf2, 0xb8ac7c),
+    ...stillwerkModules(0xd9c24f),
+    box(0, WALL_HEIGHT_LOW / 2, 0, 2, WALL_HEIGHT_LOW, 2, 0xd9c24f),
   ],
   spawnPoints: [
-    [19, 0, 19], [-19, 0, 19], [19, 0, -19], [-19, 0, -19],
-    [0, 0, 20], [0, 0, -20], [20, 0, 0], [-20, 0, 0],
+    [21, 0, 21], [-21, 0, 21], [21, 0, -21], [-21, 0, -21],
+    [7, 0, 21], [-7, 0, -21], [21, 0, 7], [-21, 0, -7],
   ],
   patrolPoints: [
-    [16, 0, 10], [4, 0, 8], [-4, 0, 8], [-16, 0, 10],
-    [-16, 0, -10], [-4, 0, -8], [4, 0, -8], [16, 0, -10],
+    [7.75, 0, 15.5], [15.5, 0, 7.75], [15.5, 0, -7.75], [7.75, 0, -15.5],
+    [-7.75, 0, -15.5], [-15.5, 0, -7.75], [-15.5, 0, 7.75], [-7.75, 0, 15.5],
   ],
   coverSpots: [
-    [6, 0, 3.5], [9, 0, 3.5], [-7, 0, -4.5], [-10, 0, -4.5],
-    [0, 0, 5.5], [0, 0, -5.5], [12, 0, 4], [-12, 0, -4],
+    [5, 0, 15.5], [15.5, 0, 5], [15.5, 0, -5], [5, 0, -15.5],
+    [-5, 0, -15.5], [-15.5, 0, -5], [-15.5, 0, 5], [-5, 0, 15.5],
   ],
 };
 
 // ---------------------------------------------------------------------------
-// MAP 3: Enge Korridor-Map mit mehreren Wegen/Kreuzungen
+// MAP 3: Hochsteg — lange Überführung mit Wasser darunter, wenig seitliche Deckung.
+// Niedrige Geländer statt hoher Randmauern an den Längsseiten für offene Sichtlinien.
 // ---------------------------------------------------------------------------
-const arenaHalf3 = 26;
+const bridgeHalfX = 9;
+const bridgeHalfZ = 27;
 const map3 = {
-  id: "corridors",
-  name: "Korridore",
-  description: "Enge Gänge, viele Kreuzungen",
+  id: "hochsteg",
+  name: "Hochsteg",
+  description: "Lange Überführung über Wasser, wenig seitliche Deckung",
   difficulty: "hard",
-  accent: 0x6bff8e,
-  groundColor: 0xdde2e8,
-  groundHalf: arenaHalf3,
-  skyColor: 0xc9d6e0,
-  fogColor: 0xc9d6e0,
-  fogNear: 22,
-  fogFar: 60,
+  accent: 0x4fd1ff,
+  groundColor: 0x8fa9c4,
+  groundHalf: bridgeHalfZ,
+  skyColor: 0xaecbe0,
+  fogColor: 0xaecbe0,
+  fogNear: 30,
+  fogFar: 80,
   walls: [
-    ...boundaryWalls(arenaHalf3, 0x9fb4c9),
-    // Äußerer Ring aus Korridor-Wänden
-    box(-18, WALL_HEIGHT_TALL / 2, 0, 1, WALL_HEIGHT_TALL, 30, 0x6bff8e),
-    box(18, WALL_HEIGHT_TALL / 2, 0, 1, WALL_HEIGHT_TALL, 30, 0x6bff8e),
-    box(0, WALL_HEIGHT_TALL / 2, -18, 30, WALL_HEIGHT_TALL, 1, 0x6bff8e),
-    box(0, WALL_HEIGHT_TALL / 2, 18, 30, WALL_HEIGHT_TALL, 1, 0x6bff8e),
-    // Innere Kreuz-Struktur mit Lücken (Kreuzungen)
-    box(-9, WALL_HEIGHT_TALL / 2, -9, 1, WALL_HEIGHT_TALL, 9, 0x9fe6b0),
-    box(-9, WALL_HEIGHT_TALL / 2, 6, 1, WALL_HEIGHT_TALL, 9, 0x9fe6b0),
-    box(9, WALL_HEIGHT_TALL / 2, -9, 1, WALL_HEIGHT_TALL, 9, 0x9fe6b0),
-    box(9, WALL_HEIGHT_TALL / 2, 6, 1, WALL_HEIGHT_TALL, 9, 0x9fe6b0),
-    box(-6, WALL_HEIGHT_TALL / 2, -9, 9, WALL_HEIGHT_TALL, 1, 0x9fe6b0),
-    box(6, WALL_HEIGHT_TALL / 2, 9, 9, WALL_HEIGHT_TALL, 1, 0x9fe6b0),
-    // Zentrale kleine Deckung an der mittleren Kreuzung
-    box(0, 1, 0, 2, 2, 2, 0x6bff8e),
-    // Ein paar zusätzliche Trennwände für mehr Wege
-    box(-13, WALL_HEIGHT_TALL / 2, 13, 8, WALL_HEIGHT_TALL, 1, 0x9fe6b0),
-    box(13, WALL_HEIGHT_TALL / 2, -13, 8, WALL_HEIGHT_TALL, 1, 0x9fe6b0),
+    box(0, BOUNDARY_HEIGHT / 2, -bridgeHalfZ - 0.5, bridgeHalfX * 2 + 2, BOUNDARY_HEIGHT, 1, 0x6f88a3),
+    box(0, BOUNDARY_HEIGHT / 2, bridgeHalfZ + 0.5, bridgeHalfX * 2 + 2, BOUNDARY_HEIGHT, 1, 0x6f88a3),
+    box(-bridgeHalfX - 0.4, WALL_HEIGHT_LOW / 2, 0, 0.8, WALL_HEIGHT_LOW, bridgeHalfZ * 2, 0x9fb4c9),
+    box(bridgeHalfX + 0.4, WALL_HEIGHT_LOW / 2, 0, 0.8, WALL_HEIGHT_LOW, bridgeHalfZ * 2, 0x9fb4c9),
+    box(-5, WALL_HEIGHT_TALL / 2, -15, 1.6, WALL_HEIGHT_TALL, 1.6, 0x4fd1ff),
+    box(5, WALL_HEIGHT_TALL / 2, -15, 1.6, WALL_HEIGHT_TALL, 1.6, 0x4fd1ff),
+    box(-5, WALL_HEIGHT_TALL / 2, 0, 1.6, WALL_HEIGHT_TALL, 1.6, 0x4fd1ff),
+    box(5, WALL_HEIGHT_TALL / 2, 0, 1.6, WALL_HEIGHT_TALL, 1.6, 0x4fd1ff),
+    box(-5, WALL_HEIGHT_TALL / 2, 15, 1.6, WALL_HEIGHT_TALL, 1.6, 0x4fd1ff),
+    box(5, WALL_HEIGHT_TALL / 2, 15, 1.6, WALL_HEIGHT_TALL, 1.6, 0x4fd1ff),
   ],
   spawnPoints: [
-    [-21, 0, -21], [21, 0, 21], [-21, 0, 21], [21, 0, -21],
-    [0, 0, 0.1], [-21, 0, 0], [21, 0, 0], [0, 0, -21],
+    [-3, 0, -24], [3, 0, -24], [-3, 0, 24], [3, 0, 24],
+    [-6, 0, -24], [6, 0, 24], [0, 0, -24], [0, 0, 24],
   ],
   patrolPoints: [
-    [-13, 0, -13], [-13, 0, 0], [-13, 0, 13], [0, 0, 13],
-    [13, 0, 13], [13, 0, 0], [13, 0, -13], [0, 0, -13],
+    [0, 0, -20], [0, 0, -10], [0, 0, 0], [0, 0, 10],
+    [0, 0, 20], [4, 0, -7], [-4, 0, 7], [0, 0, -15],
   ],
   coverSpots: [
-    [-9, 0, -1], [9, 0, 1], [-1, 0, 9], [1, 0, -9],
-    [-13, 0, -9], [13, 0, 9], [3, 0, 3], [-3, 0, -3],
+    [-5, 0, -17], [5, 0, -17], [-5, 0, -2], [5, 0, -2],
+    [-5, 0, 13], [5, 0, 13], [-5, 0, 2], [5, 0, 2],
   ],
 };
 
-export const MAPS = [map1, map2, map3];
+// ---------------------------------------------------------------------------
+// MAP 4: Nebelfeld — Friedhof/Waldrand bei Nacht, dichter Nebel, enge Sichtlinien.
+// ---------------------------------------------------------------------------
+const graveSpots = [
+  [-14, -9], [-11, -6], [-8, -11], [-5, -4], [-2, -8], [3, -6], [7, -10], [11, -5],
+  [14, -8], [-13, 6], [-9, 9], [-4, 5], [2, 9], [6, 6], [10, 10], [13, 4],
+];
+const treeSpots = [
+  [-17, 2], [-6, 13], [8, -15], [16, 9], [-15, -15], [15, -3], [0, 15], [-2, -16],
+];
+function nebelfeldWalls(graveColor, treeColor) {
+  const walls = [];
+  for (const [x, z] of graveSpots) walls.push(box(x, 0.6, z, 0.55, 1.2, 0.16, graveColor));
+  for (const [x, z] of treeSpots) walls.push(box(x, 2.6, z, 0.45, 5.2, 0.45, treeColor));
+  return walls;
+}
+const arenaHalf4 = 22;
+const map4 = {
+  id: "nebelfeld",
+  name: "Nebelfeld",
+  description: "Nächtlicher Friedhof am Waldrand, dichter Nebel",
+  difficulty: "hard",
+  accent: 0x9fe6b0,
+  groundColor: 0x2c332b,
+  groundHalf: arenaHalf4,
+  skyColor: 0x171d1a,
+  fogColor: 0x171d1a,
+  fogNear: 9,
+  fogFar: 30,
+  walls: [
+    ...boundaryWalls(arenaHalf4, 0x232a22),
+    ...nebelfeldWalls(0x51584e, 0x2f2a22),
+  ],
+  spawnPoints: [
+    [18, 0, 18], [-18, 0, 18], [18, 0, -18], [-18, 0, -18],
+    [0, 0, 19], [0, 0, -19], [19, 0, 0], [-19, 0, 0],
+  ],
+  patrolPoints: [
+    [14, 0, 12], [4, 0, 14], [-6, 0, 10], [-14, 0, 14],
+    [-14, 0, -12], [-4, 0, -12], [6, 0, -14], [14, 0, -12],
+  ],
+  coverSpots: [
+    [-6.5, 0, -11], [8.5, 0, -10], [-0.5, 0, -8], [4.5, 0, -6],
+    [-7.5, 0, 9], [3.5, 0, 9], [12.5, 0, -5], [-11.5, 0, 6],
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// MAP 5: Hinterhof — Spielplatz/Hinterhof, Kisten & Holzzäune, verwinkelt.
+// ---------------------------------------------------------------------------
+const arenaHalf5 = 21;
+const map5 = {
+  id: "hinterhof",
+  name: "Hinterhof",
+  description: "Kisten, Zäune, viele kleine Deckungsobjekte",
+  difficulty: "medium",
+  accent: 0xff8a3d,
+  groundColor: 0xe6dcc4,
+  groundHalf: arenaHalf5,
+  skyColor: 0xbfe2ff,
+  fogColor: 0xbfe2ff,
+  fogNear: 32,
+  fogFar: 78,
+  walls: [
+    ...boundaryWalls(arenaHalf5, 0xc9a86a),
+    // Kisten-Cluster
+    box(6, 0.8, 6, 1.6, 1.6, 1.6, 0xff8a3d),
+    box(8.4, 0.8, 6, 1.6, 1.6, 1.6, 0xffc26b),
+    box(6, 0.8, 8.4, 1.6, 1.6, 1.6, 0xffc26b),
+    box(-7, 0.8, -7, 1.6, 1.6, 1.6, 0xff8a3d),
+    box(-9.4, 0.8, -7, 1.6, 1.6, 1.6, 0xffc26b),
+    box(-7, 0.8, -9.4, 1.6, 1.6, 1.6, 0xffc26b),
+    // Zaun-Linien (Holzzäune, niedrig, mit Lücken für Wege)
+    box(-2, WALL_HEIGHT_LOW * 0.6, 3, 6, WALL_HEIGHT_LOW * 1.2, 0.3, 0x9c7a4a),
+    box(6, WALL_HEIGHT_LOW * 0.6, -1, 0.3, WALL_HEIGHT_LOW * 1.2, 7, 0x9c7a4a),
+    box(-6, WALL_HEIGHT_LOW * 0.6, 1, 0.3, WALL_HEIGHT_LOW * 1.2, 7, 0x9c7a4a),
+    box(2, WALL_HEIGHT_LOW * 0.6, -4, 6, WALL_HEIGHT_LOW * 1.2, 0.3, 0x9c7a4a),
+    // Ecktürmchen als hohe Deckung
+    box(15, WALL_HEIGHT_TALL / 2, 15, 2.4, WALL_HEIGHT_TALL, 2.4, 0xff8a3d),
+    box(-15, WALL_HEIGHT_TALL / 2, 15, 2.4, WALL_HEIGHT_TALL, 2.4, 0xff8a3d),
+    box(15, WALL_HEIGHT_TALL / 2, -15, 2.4, WALL_HEIGHT_TALL, 2.4, 0xff8a3d),
+    box(-15, WALL_HEIGHT_TALL / 2, -15, 2.4, WALL_HEIGHT_TALL, 2.4, 0xff8a3d),
+  ],
+  spawnPoints: [
+    [18, 0, 18], [-18, 0, 18], [18, 0, -18], [-18, 0, -18],
+    [0, 0, 18], [0, 0, -18], [18, 0, 0], [-18, 0, 0],
+  ],
+  patrolPoints: [
+    [12, 0, 8], [3, 0, 9], [-4, 0, 7], [-12, 0, 9],
+    [-12, 0, -8], [-3, 0, -8], [4, 0, -9], [12, 0, -8],
+  ],
+  coverSpots: [
+    [6, 0, 3.5], [9, 0, 8], [-7, 0, -3.5], [-12, 0, -9],
+    [0, 0, 6], [0, 0, -6], [11, 0, -2], [-11, 0, 2],
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// MAP 6: Kranhafen — Docks/Industrie, Container gemischt mit offenen Bereichen.
+// ---------------------------------------------------------------------------
+const arenaHalf6 = 26;
+const containerSpots = [
+  [8, -10, 4.5, 2.2, 2.2, 0x4fd1ff], [10.2, -10, 4.5, 2.2, 2.2, 0xff6b4a],
+  [8, -6.5, 4.5, 2.2, 2.2, 0xffd24f], [-9, 9, 4.5, 2.2, 2.2, 0xff6b4a],
+  [-11.2, 9, 4.5, 2.2, 2.2, 0x4fd1ff], [-9, 12.5, 4.5, 2.2, 2.2, 0x9fe6b0],
+  [-13, -12, 4.5, 2.2, 2.2, 0xffd24f], [13, 12, 4.5, 2.2, 2.2, 0x4fd1ff],
+];
+function kranhafenWalls() {
+  const walls = [];
+  for (const [x, z, len, h, d, color] of containerSpots) walls.push(box(x, h / 2, z, len, h, d, color));
+  // Kran-Silhouette (rein dekorativ, weit oberhalb der Spielhöhe)
+  walls.push(box(-18, 4.5, -18, 0.6, 9, 0.6, 0xc9852a));
+  walls.push(box(-14, 8.6, -18, 8, 0.5, 0.5, 0xc9852a));
+  walls.push(box(17, 4.5, 17, 0.6, 9, 0.6, 0xc9852a));
+  walls.push(box(13, 8.6, 17, 8, 0.5, 0.5, 0xc9852a));
+  return walls;
+}
+const map6 = {
+  id: "kranhafen",
+  name: "Kranhafen",
+  description: "Container-Yard mit offenen und engen Bereichen",
+  difficulty: "medium",
+  accent: 0xffb020,
+  groundColor: 0xc7ccd2,
+  groundHalf: arenaHalf6,
+  skyColor: 0xc3cdd6,
+  fogColor: 0xc3cdd6,
+  fogNear: 34,
+  fogFar: 82,
+  walls: [
+    ...boundaryWalls(arenaHalf6, 0x9aa3ad),
+    ...kranhafenWalls(),
+  ],
+  spawnPoints: [
+    [21, 0, 21], [-21, 0, 21], [21, 0, -21], [-21, 0, -21],
+    [0, 0, 22], [0, 0, -22], [22, 0, 0], [-22, 0, 0],
+  ],
+  patrolPoints: [
+    [16, 0, 14], [6, 0, 16], [-4, 0, 14], [-16, 0, 16],
+    [-16, 0, -14], [-6, 0, -14], [8, 0, -16], [16, 0, -14],
+  ],
+  coverSpots: [
+    [8, 0, 7], [9, 0, 3], [-6, 0, 9], [-6, 0, 13],
+    [-16, 0, -11], [-1, 0, -2], [10, 0, 9], [4, 0, -6],
+  ],
+};
+
+export const MAPS = [map1, map2, map3, map4, map5, map6];
 
 // ---------------------------------------------------------------------------
 // Geometrie-Aufbau

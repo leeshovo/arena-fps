@@ -1,6 +1,8 @@
 // weapons.js — Waffensystem: Katalog aus 14 Waffen (6 Primär/3 Sekundär/2 Nahkampf/3 Utility),
-// je Match aus dem Loadout zusammengesetzt. Schuss-Raycasting (inkl. Pellets/Burst), Nachladen,
-// Nahkampf, Utility (Explosion/Rauch/Heilung), Skins, Mündungsblitz/Tracer, Recoil, Bobbing.
+// je Match aus dem Loadout zusammengesetzt. Jede Waffe hat 2-3 freischaltbare Tier-Stufen mit
+// eigenem Namen (Standard gratis, höhere Stufen mit Akzentfarbe/Energie-Riss-Overlay).
+// Schuss-Raycasting (inkl. Pellets), Nachladen, Nahkampf (mit Backstab-Bonus), Utility
+// (Explosion/Rauch/Heilung), einheitliches ADS für alle Schusswaffen, Recoil-Pattern, Bobbing.
 import * as THREE from "three";
 import * as Audio from "./audio.js";
 
@@ -8,18 +10,8 @@ export const SLOT = { PRIMARY: 0, SECONDARY: 1, MELEE: 2, UTILITY: 3 };
 const SLOT_TYPE = ["primary", "secondary", "melee", "utility"];
 
 // ---------------------------------------------------------------------------
-// Skins — reine Farbpaletten, auf jede Waffe anwendbar (Katalog-IDs aus progression.js)
-// ---------------------------------------------------------------------------
-export const SKIN_PALETTES = {
-  skin_default: null, // benutzt die Eigenfarben der Waffe
-  skin_glacier: { color: 0x0f1a1f, accent: 0x4fd1ff },
-  skin_inferno: { color: 0x1a0e08, accent: 0xff5522 },
-  skin_neon_violet: { color: 0x0c0810, accent: 0xea3bff },
-  skin_gold: { color: 0x181410, accent: 0xffd24f },
-};
-
-// ---------------------------------------------------------------------------
-// Waffenkatalog
+// Waffenkatalog — jede Waffe trägt ihre eigenen Tier-Stufen (Index 0 = Basis, gratis
+// mit der Waffe zusammen freigeschaltet; höhere Indizes eigene Unlock-Katalog-Einträge).
 // ---------------------------------------------------------------------------
 export const WEAPON_CATALOG = {
   // --- Primärwaffen ------------------------------------------------------
@@ -30,27 +22,25 @@ export const WEAPON_CATALOG = {
     spreadBase: 0.006, spreadMax: 0.05, spreadPerShot: 0.006, spreadRecover: 0.12, moveSpreadMult: 2.2,
     recoilKick: 0.0075, moveSpeedMult: 0.9,
     adsSpreadMult: 0.18, adsSpeedMult: 0.8, adsFov: 55,
-    color: 0x15171c, accent: 0xb84dff,
+    color: 0x15171c,
+    tiers: [
+      { name: "Sturmgewehr", accent: 0xb84dff, overlay: false },
+      { id: "rifle_ar_t2", name: "Kernglut", level: 3, cost: 300, accent: 0xff8a3d, overlay: true },
+    ],
     viewmodel: { kind: "rifle", bodyW: 0.09, bodyH: 0.13, bodyLen: 0.62, bodyZ: -0.1, stockLen: 0.2, magW: 0.06, magH: 0.22, magD: 0.09, barrelR: 0.018, barrelLen: 0.22 },
   },
-  rifle_smg: {
-    id: "rifle_smg", type: "auto", slotType: "primary", name: "SMG", grantsAirJump: true,
-    damage: 13, headMultiplier: 1.2, fireRate: 14, magSize: 40, reserveMax: 160, reloadTime: 1.3,
-    range: 35, optimalRange: 14, minDamageMultiplier: 0.45,
-    spreadBase: 0.009, spreadMax: 0.07, spreadPerShot: 0.006, spreadRecover: 0.16, moveSpreadMult: 1.8,
-    recoilKick: 0.005, moveSpeedMult: 0.97,
-    adsSpreadMult: 0.22, adsSpeedMult: 0.85, adsFov: 58,
-    color: 0x171a20, accent: 0x4fd1ff,
-    viewmodel: { kind: "rifle", bodyW: 0.08, bodyH: 0.12, bodyLen: 0.4, bodyZ: -0.06, stockLen: 0.12, magW: 0.055, magH: 0.26, magD: 0.08, barrelR: 0.015, barrelLen: 0.12 },
-  },
   rifle_dmr: {
-    id: "rifle_dmr", type: "semi", slotType: "primary", name: "Marksman Rifle",
+    id: "rifle_dmr", type: "semi", slotType: "primary", name: "Scharfschützengewehr",
     damage: 42, headMultiplier: 1.3, fireRate: 2.6, magSize: 12, reserveMax: 48, reloadTime: 1.9,
     range: 75, optimalRange: 50, minDamageMultiplier: 0.6,
     spreadBase: 0.003, spreadMax: 0.02, spreadPerShot: 0.01, spreadRecover: 0.2, moveSpreadMult: 3,
     recoilKick: 0.013, moveSpeedMult: 0.88,
-    adsSpreadMult: 0.1, adsSpeedMult: 0.72, adsFov: 46,
-    color: 0x14171c, accent: 0xff8a3d,
+    adsSpreadMult: 0.08, adsSpeedMult: 0.68, adsFov: 40,
+    color: 0x14171c,
+    tiers: [
+      { name: "Scharfschützengewehr", accent: 0xff8a3d, overlay: false },
+      { id: "rifle_dmr_t2", name: "Weitschuss-Prisma", level: 9, cost: 450, accent: 0x4fd1ff, overlay: true },
+    ],
     viewmodel: { kind: "rifle", bodyW: 0.085, bodyH: 0.12, bodyLen: 0.78, bodyZ: -0.14, stockLen: 0.22, magW: 0.05, magH: 0.16, magD: 0.08, barrelR: 0.016, barrelLen: 0.3, hasScope: true },
   },
   rifle_shotgun: {
@@ -60,40 +50,71 @@ export const WEAPON_CATALOG = {
     spreadBase: 0.05, spreadMax: 0.08, spreadPerShot: 0.01, spreadRecover: 0.3, moveSpreadMult: 1.3,
     recoilKick: 0.02, moveSpeedMult: 0.85,
     adsSpreadMult: 0.6, adsSpeedMult: 0.85, adsFov: 66,
-    color: 0x1a1512, accent: 0xff8a3d,
+    color: 0x1a1512,
+    tiers: [
+      { name: "Schrotflinte", accent: 0xff8a3d, overlay: false },
+      { id: "rifle_shotgun_t2", name: "Bruchlader", level: 7, cost: 380, accent: 0xff4a4a, overlay: true },
+    ],
     viewmodel: { kind: "rifle", bodyW: 0.1, bodyH: 0.13, bodyLen: 0.5, bodyZ: -0.08, stockLen: 0.16, magW: 0.09, magH: 0.09, magD: 0.28, magTilt: 0, barrelR: 0.022, barrelLen: 0.24, doubleBarrel: true },
   },
-  rifle_lmg: {
-    id: "rifle_lmg", type: "auto", slotType: "primary", name: "LMG",
-    damage: 20, headMultiplier: 1.2, fireRate: 8, magSize: 75, reserveMax: 150, reloadTime: 2.8,
-    range: 50, optimalRange: 24, minDamageMultiplier: 0.5,
-    spreadBase: 0.012, spreadMax: 0.065, spreadPerShot: 0.005, spreadRecover: 0.08, moveSpreadMult: 3,
-    recoilKick: 0.007, moveSpeedMult: 0.78,
-    adsSpreadMult: 0.3, adsSpeedMult: 0.7, adsFov: 60,
-    color: 0x181a16, accent: 0x6bff8e,
-    viewmodel: { kind: "rifle", bodyW: 0.1, bodyH: 0.15, bodyLen: 0.68, bodyZ: -0.1, stockLen: 0.2, magW: 0, magH: 0, magD: 0, barrelR: 0.02, barrelLen: 0.26, hasDrum: true, hasBipod: true },
-  },
   rifle_burst: {
-    id: "rifle_burst", type: "burst", slotType: "primary", name: "Burst-Gewehr", grantsAirJump: true,
+    id: "rifle_burst", type: "burst", slotType: "primary", name: "Burst-Gewehr",
     damage: 16, headMultiplier: 1.3, burstCount: 3, burstInterval: 0.045, fireRate: 2.2,
     magSize: 24, reserveMax: 96, reloadTime: 1.5,
     range: 50, optimalRange: 30, minDamageMultiplier: 0.55,
     spreadBase: 0.005, spreadMax: 0.03, spreadPerShot: 0.007, spreadRecover: 0.18, moveSpreadMult: 2,
     recoilKick: 0.008, moveSpeedMult: 0.92,
     adsSpreadMult: 0.15, adsSpeedMult: 0.8, adsFov: 56,
-    color: 0x161a1f, accent: 0xb84dff,
+    color: 0x161a1f,
+    tiers: [
+      { name: "Burst-Gewehr", accent: 0xb84dff, overlay: false },
+      { id: "rifle_burst_t2", name: "Salvenkern", level: 6, cost: 380, accent: 0x6bff8e, overlay: true },
+    ],
     viewmodel: { kind: "rifle", bodyW: 0.085, bodyH: 0.12, bodyLen: 0.55, bodyZ: -0.09, stockLen: 0.18, magW: 0.055, magH: 0.2, magD: 0.08, barrelR: 0.017, barrelLen: 0.2 },
+  },
+  rifle_energy: {
+    id: "rifle_energy", type: "semi", slotType: "primary", name: "Energiewaffe",
+    damage: 34, headMultiplier: 1.3, fireRate: 3.2, magSize: 10, reserveMax: 40, reloadTime: 1.7,
+    range: 55, optimalRange: 32, minDamageMultiplier: 0.6,
+    spreadBase: 0.004, spreadMax: 0.02, spreadPerShot: 0.008, spreadRecover: 0.18, moveSpreadMult: 2.4,
+    recoilKick: 0.011, moveSpeedMult: 0.88,
+    adsSpreadMult: 0.12, adsSpeedMult: 0.78, adsFov: 50,
+    color: 0x14121c,
+    tiers: [
+      { name: "Energiewaffe", accent: 0x7dffe8, overlay: false },
+      { id: "rifle_energy_t2", name: "Ionenkern", level: 10, cost: 500, accent: 0xff5ad1, overlay: true },
+      { id: "rifle_energy_t3", name: "Voidpuls", level: 12, cost: 900, accent: 0xffffff, overlay: true },
+    ],
+    viewmodel: { kind: "energy", bodyW: 0.09, bodyH: 0.12, bodyLen: 0.58, bodyZ: -0.1, stockLen: 0.16, magW: 0, magH: 0, magD: 0, barrelR: 0.024, barrelLen: 0.24 },
+  },
+  rifle_paint: {
+    id: "rifle_paint", type: "auto", slotType: "primary", name: "Farbwaffe", paintSplash: true,
+    damage: 15, headMultiplier: 1.15, fireRate: 7, magSize: 20, reserveMax: 80, reloadTime: 1.5,
+    range: 30, optimalRange: 16, minDamageMultiplier: 0.4,
+    spreadBase: 0.008, spreadMax: 0.05, spreadPerShot: 0.007, spreadRecover: 0.15, moveSpreadMult: 2,
+    recoilKick: 0.007, moveSpeedMult: 0.93,
+    adsSpreadMult: 0.2, adsSpeedMult: 0.83, adsFov: 58,
+    color: 0x1a1a20,
+    tiers: [
+      { name: "Farbwaffe", accent: 0xff4fd1, overlay: false },
+      { id: "rifle_paint_t2", name: "Chromspritzer", level: 5, cost: 350, accent: 0x4fd1ff, overlay: true },
+    ],
+    viewmodel: { kind: "rifle", bodyW: 0.088, bodyH: 0.12, bodyLen: 0.48, bodyZ: -0.08, stockLen: 0.14, magW: 0.06, magH: 0.18, magD: 0.08, barrelR: 0.02, barrelLen: 0.18 },
   },
 
   // --- Sekundärwaffen ------------------------------------------------------
   pistol_std: {
-    id: "pistol_std", type: "semi", slotType: "secondary", name: "Pistole", grantsAirJump: true,
+    id: "pistol_std", type: "semi", slotType: "secondary", name: "Pistole",
     damage: 22, headMultiplier: 1.25, fireRate: 6.5, magSize: 12, reserveMax: 48, reloadTime: 1.15,
     range: 40, optimalRange: 18, minDamageMultiplier: 0.5,
     spreadBase: 0.004, spreadMax: 0.035, spreadPerShot: 0.008, spreadRecover: 0.16, moveSpreadMult: 1.8,
     recoilKick: 0.009, moveSpeedMult: 0.95,
-    fanShotCount: 3, fanShotSpread: 0.012, fanShotInterval: 0.07, fanShotCooldown: 0.9,
-    color: 0x1c1f26, accent: 0xff8a3d,
+    adsSpreadMult: 0.2, adsSpeedMult: 0.86, adsFov: 60,
+    color: 0x1c1f26,
+    tiers: [
+      { name: "Pistole", accent: 0xff8a3d, overlay: false },
+      { id: "pistol_std_t2", name: "Nachtstern", level: 3, cost: 250, accent: 0x4fd1ff, overlay: true },
+    ],
     viewmodel: { kind: "pistol", bodyW: 0.07, bodyH: 0.12, bodyLen: 0.24, gripLen: 0.16, barrelR: 0.014, barrelLen: 0.1 },
   },
   pistol_revolver: {
@@ -102,34 +123,51 @@ export const WEAPON_CATALOG = {
     range: 35, optimalRange: 20, minDamageMultiplier: 0.55,
     spreadBase: 0.006, spreadMax: 0.03, spreadPerShot: 0.012, spreadRecover: 0.22, moveSpreadMult: 1.6,
     recoilKick: 0.016, moveSpeedMult: 0.97,
-    adsSpreadMult: 0.15, adsSpeedMult: 0.82, adsFov: 54,
-    color: 0x1a1a1a, accent: 0xffd24f,
+    adsSpreadMult: 0.12, adsSpeedMult: 0.8, adsFov: 52,
+    color: 0x1a1a1a,
+    tiers: [
+      { name: "Wuchtrevolver", accent: 0xffd24f, overlay: false },
+      { id: "pistol_revolver_t2", name: "Sechserkern", level: 6, cost: 350, accent: 0xb84dff, overlay: true },
+      { id: "pistol_revolver_t3", name: "Letztes Wort", level: 9, cost: 700, accent: 0xff4a4a, overlay: true },
+    ],
     viewmodel: { kind: "pistol", bodyW: 0.075, bodyH: 0.12, bodyLen: 0.2, gripLen: 0.16, barrelR: 0.016, barrelLen: 0.16, cylinder: true },
   },
   pistol_machine: {
-    id: "pistol_machine", type: "semi", slotType: "secondary", name: "Maschinenpistole", grantsAirJump: true,
+    id: "pistol_machine", type: "auto", slotType: "secondary", name: "Maschinenpistole",
     damage: 14, headMultiplier: 1.15, fireRate: 11, magSize: 20, reserveMax: 80, reloadTime: 1.0,
     range: 28, optimalRange: 10, minDamageMultiplier: 0.4,
     spreadBase: 0.01, spreadMax: 0.06, spreadPerShot: 0.009, spreadRecover: 0.2, moveSpreadMult: 2,
     recoilKick: 0.006, moveSpeedMult: 0.98,
-    fanShotCount: 4, fanShotSpread: 0.02, fanShotInterval: 0.05, fanShotCooldown: 0.8,
-    color: 0x1c2128, accent: 0x4fd1ff,
+    adsSpreadMult: 0.25, adsSpeedMult: 0.88, adsFov: 62,
+    color: 0x1c2128,
+    tiers: [
+      { name: "Maschinenpistole", accent: 0x4fd1ff, overlay: false },
+      { id: "pistol_machine_t2", name: "Wirbelkern", level: 5, cost: 300, accent: 0xff8a3d, overlay: true },
+    ],
     viewmodel: { kind: "pistol", bodyW: 0.065, bodyH: 0.1, bodyLen: 0.2, gripLen: 0.14, barrelR: 0.012, barrelLen: 0.06, foregrip: true },
   },
 
   // --- Nahkampfwaffen ------------------------------------------------------
   melee_knife: {
-    id: "melee_knife", type: "melee", slotType: "melee", name: "Nahkampfmesser", grantsAirJump: true,
+    id: "melee_knife", type: "melee", slotType: "melee", name: "Nahkampfmesser",
     damage: 55, range: 2.3, cooldown: 0.65, moveSpeedMult: 1.1,
-    heavyDamage: 45, heavyRange: 2.8, heavyCooldown: 1.25, backstabDotThreshold: -0.3,
-    color: 0x1a1d22, accent: 0xb84dff,
+    backstabMultiplier: 2.4, backstabDotThreshold: -0.3,
+    color: 0x1a1d22,
+    tiers: [
+      { name: "Nahkampfmesser", accent: 0xb84dff, overlay: false },
+      { id: "melee_knife_t2", name: "Schattenklinge", level: 4, cost: 300, accent: 0x4fd1ff, overlay: true },
+    ],
     viewmodel: { kind: "knife" },
   },
   melee_axe: {
     id: "melee_axe", type: "melee", slotType: "melee", name: "Kampfaxt",
-    damage: 65, range: 2.1, cooldown: 0.85, moveSpeedMult: 1.05,
-    heavyDamage: 60, heavyRange: 2.6, heavyCooldown: 1.5, backstabDotThreshold: -2, // keine Backstab-Sonderregel
-    color: 0x1c1712, accent: 0xff8a3d,
+    damage: 78, range: 2.1, cooldown: 1.0, moveSpeedMult: 1.0,
+    color: 0x1c1712,
+    tiers: [
+      { name: "Kampfaxt", accent: 0xff8a3d, overlay: false },
+      { id: "melee_axe_t2", name: "Bruchhieb", level: 5, cost: 350, accent: 0xff4a4a, overlay: true },
+      { id: "melee_axe_t3", name: "Kernspalter", level: 8, cost: 650, accent: 0x6bff8e, overlay: true },
+    ],
     viewmodel: { kind: "axe" },
   },
 
@@ -137,22 +175,33 @@ export const WEAPON_CATALOG = {
   utility_grenade: {
     id: "utility_grenade", type: "explosive", slotType: "utility", name: "Wurfladung",
     throwSpeed: 17, cooldown: 5.0, fuseTime: 1.5, explosionRadius: 5.5, explosionDamage: 80,
-    knockbackForce: 15, moveSpeedMult: 1.0,
-    subspacePadCooldown: 4.0, subspacePadLaunchForce: 15, subspacePadLingerTime: 6.0,
-    color: 0x181b20, accent: 0xff8a3d,
+    knockbackForce: 12, moveSpeedMult: 1.0,
+    color: 0x181b20,
+    tiers: [
+      { name: "Wurfladung", accent: 0xff8a3d, overlay: false },
+      { id: "utility_grenade_t2", name: "Sprengkern", level: 4, cost: 300, accent: 0xff4a4a, overlay: true },
+    ],
     viewmodel: { kind: "grenade" },
   },
   utility_smoke: {
     id: "utility_smoke", type: "smoke", slotType: "utility", name: "Rauchgranate",
     throwSpeed: 15, cooldown: 6.0, fuseTime: 1.2, moveSpeedMult: 1.0,
     smokeRadius: 5.5, smokeDuration: 8.0,
-    color: 0x22262b, accent: 0xcfd6dc,
+    color: 0x22262b,
+    tiers: [
+      { name: "Rauchgranate", accent: 0xcfd6dc, overlay: false },
+      { id: "utility_smoke_t2", name: "Nebelkern", level: 6, cost: 300, accent: 0x4fd1ff, overlay: true },
+    ],
     viewmodel: { kind: "grenade" },
   },
   utility_medkit: {
-    id: "utility_medkit", type: "heal", slotType: "utility", name: "Med-Kit",
+    id: "utility_medkit", type: "heal", slotType: "utility", name: "Heilkapsel",
     cooldown: 14.0, healAmount: 50, healChannelTime: 1.4, moveSpeedMult: 1.0,
-    color: 0x1a1f1c, accent: 0x6bff8e,
+    color: 0x1a1f1c,
+    tiers: [
+      { name: "Heilkapsel", accent: 0x6bff8e, overlay: false },
+      { id: "utility_medkit_t2", name: "Regenkern", level: 7, cost: 350, accent: 0xffd24f, overlay: true },
+    ],
     viewmodel: { kind: "medkit" },
   },
 };
@@ -203,10 +252,20 @@ function autoCracks(bounds) {
   return segs;
 }
 
-function buildParametricGun(def, skin) {
+/** Immer sichtbarer schmaler Akzentstreifen (auch auf der Basis-Tierstufe ohne Energie-Risse). */
+function addAccentStripe(g, accent, w, h, len, z) {
+  const stripe = new THREE.Mesh(
+    new THREE.BoxGeometry(0.018, 0.018, len * 0.7),
+    new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: 1.1 })
+  );
+  stripe.position.set(w / 2 + 0.005, h * 0.12, z);
+  g.add(stripe);
+}
+
+function buildParametricGun(def, tier) {
   const p = def.viewmodel;
-  const color = skin ? skin.color : def.color;
-  const accent = skin ? skin.accent : def.accent;
+  const color = def.color;
+  const accent = tier.accent;
   const g = new THREE.Group();
   const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.7 });
   const darkMat = new THREE.MeshStandardMaterial({ color: 0x111318, roughness: 0.6 });
@@ -247,29 +306,9 @@ function buildParametricGun(def, skin) {
     scope.position.set(0, p.bodyH * 0.7, p.bodyZ);
     g.add(scope);
   }
-  if (p.hasDrum) {
-    const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.05, 10), darkMat);
-    drum.rotation.x = Math.PI / 2;
-    drum.position.set(0, -p.bodyH * 0.55, p.bodyZ - p.bodyLen * 0.08);
-    g.add(drum);
-  }
-  if (p.hasBipod) {
-    for (const side of [-1, 1]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.15, 0.012), darkMat);
-      leg.position.set(side * 0.05, -p.bodyH * 0.5 - 0.075, p.bodyZ - p.bodyLen / 2 - p.barrelLen * 0.3);
-      leg.rotation.z = side * 0.35;
-      g.add(leg);
-    }
-  }
 
-  const stripe = new THREE.Mesh(
-    new THREE.BoxGeometry(0.018, 0.018, p.bodyLen * 0.7),
-    new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: 1.1 })
-  );
-  stripe.position.set(p.bodyW / 2 + 0.005, p.bodyH * 0.12, p.bodyZ);
-  g.add(stripe);
-
-  addEnergyCracks(g, accent, autoCracks({ w: p.bodyW, h: p.bodyH, len: p.bodyLen, z: p.bodyZ }));
+  addAccentStripe(g, accent, p.bodyW, p.bodyH, p.bodyLen, p.bodyZ);
+  if (tier.overlay) addEnergyCracks(g, accent, autoCracks({ w: p.bodyW, h: p.bodyH, len: p.bodyLen, z: p.bodyZ }));
 
   const muzzle = new THREE.Object3D();
   muzzle.position.set(0, p.bodyH * 0.08, p.bodyZ - p.bodyLen / 2 - p.barrelLen - 0.02);
@@ -279,10 +318,47 @@ function buildParametricGun(def, skin) {
   return g;
 }
 
-function buildParametricPistol(def, skin) {
+/** Energiewaffe: eigene Silhouette mit dauerhaft leuchtendem Kernlauf statt Metall-Barrel. */
+function buildParametricEnergyGun(def, tier) {
   const p = def.viewmodel;
-  const color = skin ? skin.color : def.color;
-  const accent = skin ? skin.accent : def.accent;
+  const accent = tier.accent;
+  const g = new THREE.Group();
+  const bodyMat = new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.5, metalness: 0.3 });
+
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(p.bodyW * 0.55, p.bodyLen * 0.6, 4, 8), bodyMat);
+  body.rotation.x = Math.PI / 2;
+  body.position.set(0, 0, p.bodyZ);
+  g.add(body);
+
+  if (p.stockLen) {
+    const stock = new THREE.Mesh(new THREE.BoxGeometry(p.bodyW * 0.6, p.bodyH * 0.6, p.stockLen), bodyMat);
+    stock.position.set(0, -0.01, p.bodyZ + p.bodyLen / 2 + p.stockLen / 2 - 0.02);
+    g.add(stock);
+  }
+
+  const coreMat = new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: 2, roughness: 0.2, transparent: true, opacity: 0.92 });
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(p.barrelR, p.barrelR * 0.7, p.barrelLen, 10), coreMat);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, p.bodyH * 0.05, p.bodyZ - p.bodyLen / 2 - p.barrelLen / 2);
+  g.add(barrel);
+
+  const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.045, 0), coreMat);
+  core.position.set(0, p.bodyH * 0.55, p.bodyZ + 0.05);
+  g.add(core);
+  g.userData.cracks = [{ mesh: core, phase: 0, speed: 4 }];
+  if (tier.overlay) addEnergyCracks(g, accent, autoCracks({ w: p.bodyW, h: p.bodyH, len: p.bodyLen, z: p.bodyZ }).slice(0, 3));
+
+  const muzzle = new THREE.Object3D();
+  muzzle.position.set(0, p.bodyH * 0.05, p.bodyZ - p.bodyLen / 2 - p.barrelLen - 0.02);
+  g.add(muzzle);
+  g.userData.muzzle = muzzle;
+  return g;
+}
+
+function buildParametricPistol(def, tier) {
+  const p = def.viewmodel;
+  const color = def.color;
+  const accent = tier.accent;
   const g = new THREE.Group();
   const bodyMat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
   const darkMat = new THREE.MeshStandardMaterial({ color: 0x111318, roughness: 0.6 });
@@ -312,7 +388,8 @@ function buildParametricPistol(def, skin) {
   barrel.position.set(0, p.bodyH * 0.1, -p.bodyLen / 2 - p.barrelLen / 2);
   g.add(barrel);
 
-  addEnergyCracks(g, accent, autoCracks({ w: p.bodyW, h: p.bodyH, len: p.bodyLen, z: 0 }).slice(0, 3));
+  addAccentStripe(g, accent, p.bodyW, p.bodyH, p.bodyLen, 0);
+  if (tier.overlay) addEnergyCracks(g, accent, autoCracks({ w: p.bodyW, h: p.bodyH, len: p.bodyLen, z: 0 }).slice(0, 3));
 
   const muzzle = new THREE.Object3D();
   muzzle.position.set(0, p.bodyH * 0.1, -p.bodyLen / 2 - p.barrelLen - 0.015);
@@ -321,9 +398,9 @@ function buildParametricPistol(def, skin) {
   return g;
 }
 
-function buildMeleeModel(def, skin) {
-  const color = skin ? skin.color : def.color;
-  const accent = skin ? skin.accent : def.accent;
+function buildMeleeModel(def, tier) {
+  const color = def.color;
+  const accent = tier.accent;
   const g = new THREE.Group();
   const isAxe = def.viewmodel.kind === "axe";
 
@@ -342,16 +419,20 @@ function buildMeleeModel(def, skin) {
   handle.position.set(0, 0, isAxe ? 0.02 : 0.02);
   g.add(handle);
 
-  addEnergyCracks(g, accent, [
-    { len: 0.07, x: 0.024, y: 0.0, z: 0.0, ry: 0.5, rz: 0.4 },
-    { len: 0.05, x: -0.024, y: 0.0, z: 0.06, ry: -0.5, rz: -0.3 },
-  ]);
+  if (tier.overlay) {
+    addEnergyCracks(g, accent, [
+      { len: 0.07, x: 0.024, y: 0.0, z: 0.0, ry: 0.5, rz: 0.4 },
+      { len: 0.05, x: -0.024, y: 0.0, z: 0.06, ry: -0.5, rz: -0.3 },
+    ]);
+  } else {
+    addEnergyCracks(g, accent, [{ len: 0.05, x: 0.024, y: 0.0, z: 0.02, ry: 0.4, rz: 0.4 }]);
+  }
   return g;
 }
 
-function buildUtilityModel(def, skin) {
-  const color = skin ? skin.color : def.color;
-  const accent = skin ? skin.accent : def.accent;
+function buildUtilityModel(def, tier) {
+  const color = def.color;
+  const accent = tier.accent;
   const g = new THREE.Group();
   const kind = def.viewmodel.kind;
 
@@ -364,7 +445,7 @@ function buildUtilityModel(def, skin) {
     const barV = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.1, 0.022), new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: 0.9 }));
     barV.position.z = 0.081;
     g.add(barV);
-    addEnergyCracks(g, accent, [{ len: 0.07, x: 0.06, y: 0.03, z: -0.06, ry: 0.4, rz: 0.5 }]);
+    if (tier.overlay) addEnergyCracks(g, accent, [{ len: 0.07, x: 0.06, y: 0.03, z: -0.06, ry: 0.4, rz: 0.5 }]);
     return g;
   }
 
@@ -376,26 +457,31 @@ function buildUtilityModel(def, skin) {
   );
   cap.position.set(0, 0.1, 0);
   g.add(cap);
-  addEnergyCracks(g, accent, [
-    { len: 0.08, x: 0.03, y: 0.0, z: 0.02, ry: 0.4, rz: 0.6 },
-    { len: 0.06, x: -0.03, y: 0.02, z: -0.02, ry: -0.5, rz: -0.4 },
-  ]);
+  if (tier.overlay) {
+    addEnergyCracks(g, accent, [
+      { len: 0.08, x: 0.03, y: 0.0, z: 0.02, ry: 0.4, rz: 0.6 },
+      { len: 0.06, x: -0.03, y: 0.02, z: -0.02, ry: -0.5, rz: -0.4 },
+    ]);
+  } else {
+    addEnergyCracks(g, accent, [{ len: 0.06, x: 0.03, y: 0.0, z: 0.02, ry: 0.4, rz: 0.5 }]);
+  }
   return g;
 }
 
-function buildViewmodel(def, skin) {
+function buildViewmodel(def, tier) {
   const kind = def.viewmodel.kind;
-  if (kind === "rifle") return buildParametricGun(def, skin);
-  if (kind === "pistol") return buildParametricPistol(def, skin);
-  if (kind === "knife" || kind === "axe") return buildMeleeModel(def, skin);
-  return buildUtilityModel(def, skin);
+  if (kind === "energy") return buildParametricEnergyGun(def, tier);
+  if (kind === "rifle") return buildParametricGun(def, tier);
+  if (kind === "pistol") return buildParametricPistol(def, tier);
+  if (kind === "knife" || kind === "axe") return buildMeleeModel(def, tier);
+  return buildUtilityModel(def, tier);
 }
 
 const REST_POS = new THREE.Vector3(0.26, -0.24, -0.5);
 const REST_ROT = new THREE.Euler(0, -0.05, 0.02);
 
 export class WeaponSystem {
-  /** @param {object} loadout { primary, secondary, melee, utility, skins:{primary,secondary,melee,utility} } */
+  /** @param {object} loadout { primary, secondary, melee, utility, tiers:{primary,secondary,melee,utility} } */
   constructor(camera, scene, loadout) {
     this.camera = camera;
     this.scene = scene;
@@ -410,6 +496,9 @@ export class WeaponSystem {
     this.utilityCooldown = 0;
     this.recoilPitch = 0;
     this.recoilPitchVel = 0;
+    this.recoilYaw = 0;
+    this.recoilYawVel = 0;
+    this._shotParity = 0;
     this.currentSpread = 0;
     this.swayPhase = 0;
     this.viewKick = new THREE.Vector3();
@@ -420,18 +509,12 @@ export class WeaponSystem {
     this.aimLerp = 0;
     this._shotQueueCount = 0;
     this._shotQueueTimer = 0;
-    this._shotQueueSpread = null;
-    this.fanShotCooldown = 0;
-    this.heavyCooldown = 0;
-    this.padCooldown = 0;
     this.healTimer = 0; // >0 während des Heilungs-Channels
-    this.healCooldownTimer = 0;
 
     this.triggerHeld = false;
     this.pendingEvents = [];
     this.projectiles = [];
     this.tracers = [];
-    this.pads = [];
     this.smokes = [];
 
     this._raycaster = new THREE.Raycaster();
@@ -460,9 +543,10 @@ export class WeaponSystem {
     ];
     this.ammo = this.equipped.map((d) => (d.type === "auto" || d.type === "semi" || d.type === "burst" ? { mag: d.magSize, reserve: d.reserveMax } : null));
     this.viewmodels = this.equipped.map((def) => {
-      const skinId = (loadout.skins || {})[def.slotType] || "skin_default";
-      const skin = SKIN_PALETTES[skinId] || null;
-      const model = buildViewmodel(def, skin);
+      const slotType = def.slotType;
+      const tierIdx = Math.min((loadout.tiers || {})[slotType] ?? 0, def.tiers.length - 1);
+      const tier = def.tiers[tierIdx];
+      const model = buildViewmodel(def, tier);
       model.position.copy(REST_POS);
       model.rotation.copy(REST_ROT);
       model.visible = false;
@@ -613,6 +697,7 @@ export class WeaponSystem {
     const def = this.currentDef();
     const ammo = this.ammo[this.currentIndex];
     ammo.mag -= 1;
+    this.pendingEvents.push({ type: "shotFired" });
 
     let lastEnd = null;
     if (def.pelletCount) {
@@ -620,12 +705,12 @@ export class WeaponSystem {
         const { result, muzzleEnd } = this._fireRay(def, bots, spreadOverride, def.damage);
         lastEnd = muzzleEnd;
         if (result.hit) this.pendingEvents.push(result);
-        this._spawnTracer(this.getMuzzleWorldPosition(), muzzleEnd, def.accent, 0.05);
+        this._spawnTracer(this.getMuzzleWorldPosition(), muzzleEnd, def.tiers[0].accent, 0.05);
       }
     } else {
       const { result, muzzleEnd } = this._fireRay(def, bots, spreadOverride, null);
       lastEnd = muzzleEnd;
-      this._spawnTracer(this.getMuzzleWorldPosition(), muzzleEnd, def.accent);
+      this._spawnTracer(this.getMuzzleWorldPosition(), muzzleEnd, def.tiers[0].accent);
       if (result.hit) this.pendingEvents.push(result);
     }
 
@@ -647,8 +732,12 @@ export class WeaponSystem {
     this.muzzleFlash.scale.setScalar(0.85 + Math.random() * 0.45);
   }
 
+  /** Recoil-Pattern: vertikaler Kick baut sich beim Halten auf, plus leichte, alternierende
+   *  horizontale Auslenkung (kein reiner Zufall) — erholt sich in update() wieder. */
   _applyRecoil(def) {
     this.recoilPitchVel += def.recoilKick;
+    this._shotParity = 1 - this._shotParity;
+    this.recoilYawVel += def.recoilKick * 0.35 * (this._shotParity ? 1 : -1);
     this.viewKick.z += 0.05;
     this.viewKick.y -= 0.015;
   }
@@ -667,12 +756,15 @@ export class WeaponSystem {
     this.tracers.push({ mesh, life, maxLife: life });
   }
 
-  /** Farbspritzer auf Wänden bzw. kurzer Hitmarker-Blitz im Raum bei bestätigten Treffern. */
+  /** Farbspritzer auf Wänden bzw. kurzer Hitmarker-Blitz im Raum bei bestätigten Treffern.
+   *  Die Farbwaffe hinterlässt größere, kräftig gefärbte Spritzer statt zufälliger Farben. */
   _spawnImpactFX(hit, isWallHit) {
+    const def = this.currentDef();
     if (isWallHit) {
       const normal = hit.face ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld) : new THREE.Vector3(0, 0, 1);
-      const color = IMPACT_COLORS[Math.floor(Math.random() * IMPACT_COLORS.length)];
-      const size = 0.15 + Math.random() * 0.13;
+      const isPaint = !!def.paintSplash;
+      const color = isPaint ? def.tiers[0].accent : IMPACT_COLORS[Math.floor(Math.random() * IMPACT_COLORS.length)];
+      const size = (isPaint ? 0.26 : 0.15) + Math.random() * (isPaint ? 0.2 : 0.13);
       const geo = new THREE.CircleGeometry(size, 7);
       const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.92, depthWrite: false, side: THREE.DoubleSide });
       const mesh = new THREE.Mesh(geo, mat);
@@ -691,6 +783,8 @@ export class WeaponSystem {
     }
   }
 
+  /** Nahkampf-Treffer: automatischer Backstab-Bonus, wenn die Waffe backstabMultiplier hat
+   *  und der Treffer von hinten kam (kein separater Heavy-Attack mehr — eine Waffe, ein Angriff). */
   meleeAttack(bots) {
     const def = this.equipped[SLOT.MELEE];
     if (this.meleeCooldown > 0) return { hit: false };
@@ -715,8 +809,21 @@ export class WeaponSystem {
     if (hits.length > 0 && hits[0].object.userData?.bot) {
       const bot = hits[0].object.userData.bot;
       const isHead = !!hits[0].object.userData.isHead;
-      const dmgResult = bot.takeDamage(def.damage, isHead, "player");
-      const result = { hit: true, isHead, killed: dmgResult.killed, bot, damage: def.damage, isMelee: true };
+
+      let isBackstab = false;
+      let dmg = def.damage;
+      if (def.backstabMultiplier) {
+        const botForward = new THREE.Vector3(Math.sin(bot.mesh.rotation.y), 0, Math.cos(bot.mesh.rotation.y));
+        const botPos = bot.bodyMesh.getWorldPosition(new THREE.Vector3());
+        const toAttacker = new THREE.Vector3().subVectors(origin, botPos);
+        toAttacker.y = 0;
+        toAttacker.normalize();
+        isBackstab = botForward.dot(toAttacker) < def.backstabDotThreshold;
+        if (isBackstab) dmg = Math.round(def.damage * def.backstabMultiplier);
+      }
+
+      const dmgResult = bot.takeDamage(dmg, isHead, "player");
+      const result = { hit: true, isHead, killed: dmgResult.killed, bot, damage: dmg, isBackstab, isMelee: true };
       this.pendingEvents.push(result);
       this._spawnImpactFX(hits[0], false);
       return result;
@@ -724,7 +831,7 @@ export class WeaponSystem {
     return { hit: false };
   }
 
-  // --- Rechtsklick-Fähigkeiten (statt klassischem ADS bei Sekundär/Nahkampf) ---
+  // --- Rechtsklick = ADS für alle Schusswaffen (waffenabhängig unterschiedlich stark) ---
 
   setAiming(isAiming) {
     const def = this.currentDef();
@@ -744,89 +851,6 @@ export class WeaponSystem {
     let mult = def.moveSpeedMult || 1;
     if (this.aiming && def.adsSpeedMult) mult *= def.adsSpeedMult;
     return mult;
-  }
-
-  /** Rechtsklick (einmaliger Trigger) für Waffen ohne ADS: Fächerschuss/Heavy-Backstab/Subspace-Pad. */
-  rightClickPress(bots) {
-    const def = this.currentDef();
-    if (def.fanShotCount) return this._triggerFanShot();
-    if (def.heavyDamage) return this._heavyMelee(bots);
-    if (def.subspacePadCooldown) return this._placeSubspacePad();
-    return null;
-  }
-
-  _placeSubspacePad() {
-    const def = this.equipped[SLOT.UTILITY];
-    if (def.type !== "explosive" || this.padCooldown > 0) return false;
-    this.padCooldown = def.subspacePadCooldown;
-
-    const pos = new THREE.Vector3();
-    this.camera.getWorldPosition(pos);
-    pos.y = 0.06;
-
-    const geo = new THREE.CylinderGeometry(0.55, 0.55, 0.12, 6);
-    const mat = new THREE.MeshStandardMaterial({
-      color: def.accent, emissive: def.accent, emissiveIntensity: 0.65, roughness: 0.4, metalness: 0.1,
-      transparent: true, opacity: 0.85,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.copy(pos);
-    this.scene.add(mesh);
-    this.pads.push({ mesh, life: def.subspacePadLingerTime, launchForce: def.subspacePadLaunchForce, armDelay: 0.2 });
-    return true;
-  }
-
-  _triggerFanShot() {
-    const def = this.currentDef();
-    const ammo = this.ammo[this.currentIndex];
-    if (!ammo || this.reloading || this.fanShotCooldown > 0 || ammo.mag <= 0) return false;
-    this._shotQueueCount = Math.min(def.fanShotCount, ammo.mag);
-    this._shotQueueTimer = 0;
-    this._shotQueueSpread = def.fanShotSpread;
-    this.fanShotCooldown = def.fanShotCooldown;
-    return true;
-  }
-
-  _heavyMelee(bots) {
-    const def = this.equipped[SLOT.MELEE];
-    if (this.heavyCooldown > 0) return { hit: false };
-    this.heavyCooldown = def.heavyCooldown;
-    this.meleeSwing = 1;
-    Audio.playMelee();
-
-    const origin = new THREE.Vector3();
-    this.camera.getWorldPosition(origin);
-    const dir = new THREE.Vector3();
-    this.camera.getWorldDirection(dir);
-
-    this._raycaster.set(origin, dir);
-    this._raycaster.far = def.heavyRange;
-    this._raycaster.near = 0;
-
-    const targets = [];
-    for (const b of bots) if (!b.dead) targets.push(b.headMesh, b.bodyMesh);
-    for (const m of this._wallMeshesRef) targets.push(m);
-
-    const hits = this._raycaster.intersectObjects(targets, false);
-    if (hits.length > 0 && hits[0].object.userData?.bot) {
-      const bot = hits[0].object.userData.bot;
-      const isHead = !!hits[0].object.userData.isHead;
-
-      const botForward = new THREE.Vector3(Math.sin(bot.mesh.rotation.y), 0, Math.cos(bot.mesh.rotation.y));
-      const botPos = bot.bodyMesh.getWorldPosition(new THREE.Vector3());
-      const toAttacker = new THREE.Vector3().subVectors(origin, botPos);
-      toAttacker.y = 0;
-      toAttacker.normalize();
-      const isBackstab = botForward.dot(toAttacker) < def.backstabDotThreshold;
-
-      const dmg = isBackstab ? 9999 : def.heavyDamage;
-      const dmgResult = bot.takeDamage(dmg, isHead, "player");
-      const result = { hit: true, isHead, killed: dmgResult.killed, bot, damage: dmg, isBackstab, isMelee: true };
-      this.pendingEvents.push(result);
-      this._spawnImpactFX(hits[0], false);
-      return result;
-    }
-    return { hit: false };
   }
 
   /** G-Taste im Utility-Slot: wirft Explosion/Rauch oder startet die Heilung — je nach Waffe. */
@@ -851,13 +875,14 @@ export class WeaponSystem {
     const velocity = dir.clone().multiplyScalar(def.throwSpeed);
     velocity.y += 3.5;
 
+    const tierAccent = def.tiers[Math.min((this.loadout.tiers || {})[def.slotType] ?? 0, def.tiers.length - 1)].accent;
     const mesh = new THREE.Mesh(
       new THREE.OctahedronGeometry(0.16, 0),
-      new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.6, emissive: def.accent, emissiveIntensity: 0.35 })
+      new THREE.MeshStandardMaterial({ color: def.color, roughness: 0.6, emissive: tierAccent, emissiveIntensity: 0.35 })
     );
     mesh.position.copy(origin);
     this.scene.add(mesh);
-    this.projectiles.push({ mesh, velocity, fuse: def.fuseTime, def });
+    this.projectiles.push({ mesh, velocity, fuse: def.fuseTime, def, tierAccent });
     return true;
   }
 
@@ -869,13 +894,13 @@ export class WeaponSystem {
     proj.mesh.material.dispose();
 
     if (def.type === "smoke") {
-      this._spawnSmoke(center, def);
+      this._spawnSmoke(center, def, proj.tierAccent);
       return;
     }
 
     Audio.playExplosion();
     const fxGeo = new THREE.IcosahedronGeometry(1, 0);
-    const fxMat = new THREE.MeshBasicMaterial({ color: def.accent, transparent: true, opacity: 0.85, depthWrite: false });
+    const fxMat = new THREE.MeshBasicMaterial({ color: proj.tierAccent, transparent: true, opacity: 0.85, depthWrite: false });
     const fx = new THREE.Mesh(fxGeo, fxMat);
     fx.position.copy(center);
     fx.scale.setScalar(0.1);
@@ -912,9 +937,9 @@ export class WeaponSystem {
     }
   }
 
-  _spawnSmoke(center, def) {
+  _spawnSmoke(center, def, tierAccent) {
     const geo = new THREE.IcosahedronGeometry(def.smokeRadius * 0.7, 1);
-    const mat = new THREE.MeshBasicMaterial({ color: def.accent, transparent: true, opacity: 0.4, depthWrite: false });
+    const mat = new THREE.MeshBasicMaterial({ color: tierAccent, transparent: true, opacity: 0.4, depthWrite: false });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.copy(center);
     mesh.position.y = Math.max(mesh.position.y, def.smokeRadius * 0.35);
@@ -943,14 +968,13 @@ export class WeaponSystem {
     this.currentSpread = 0;
     this.recoilPitch = 0;
     this.recoilPitchVel = 0;
+    this.recoilYaw = 0;
+    this.recoilYawVel = 0;
     this.triggerHeld = false;
     this.aiming = false;
     this.aimLerp = 0;
     this._shotQueueCount = 0;
     this._shotQueueTimer = 0;
-    this.fanShotCooldown = 0;
-    this.heavyCooldown = 0;
-    this.padCooldown = 0;
     this.healTimer = 0;
     this.pendingEvents = [];
 
@@ -958,8 +982,6 @@ export class WeaponSystem {
     this.projectiles = [];
     for (const t of this.tracers) { this.scene.remove(t.mesh); t.mesh.geometry.dispose(); t.mesh.material.dispose(); }
     this.tracers = [];
-    for (const pad of this.pads) { this.scene.remove(pad.mesh); pad.mesh.geometry.dispose(); pad.mesh.material.dispose(); }
-    this.pads = [];
     for (const s of this.smokes) { this.scene.remove(s.mesh); s.mesh.geometry.dispose(); s.mesh.material.dispose(); }
     this.smokes = [];
 
@@ -970,6 +992,9 @@ export class WeaponSystem {
 
   getRecoilPitch() {
     return this.recoilPitch;
+  }
+  getRecoilYaw() {
+    return this.recoilYaw;
   }
 
   drainEvents() {
@@ -990,7 +1015,6 @@ export class WeaponSystem {
       reloading: this.reloading,
       meleeCooldownPct: 1 - Math.min(1, this.meleeCooldown / this.equipped[SLOT.MELEE].cooldown),
       utilityCooldownPct: 1 - Math.min(1, this.utilityCooldown / this.equipped[SLOT.UTILITY].cooldown),
-      heavyCooldownPct: 1 - Math.min(1, this.heavyCooldown / (this.equipped[SLOT.MELEE].heavyCooldown || 1)),
       healing: this.healTimer > 0,
       healProgress: this.equipped[SLOT.UTILITY].healChannelTime ? 1 - Math.max(0, this.healTimer) / this.equipped[SLOT.UTILITY].healChannelTime : 0,
       spread: this._getEffectiveSpread(def),
@@ -1029,7 +1053,6 @@ export class WeaponSystem {
         if (ammo.mag > 0) {
           this._shotQueueCount = Math.min(def.burstCount, ammo.mag);
           this._shotQueueTimer = 0;
-          this._shotQueueSpread = null;
           this.fireCooldown = 1 / def.fireRate;
         } else if (ammo.reserve > 0) {
           this.reload();
@@ -1038,15 +1061,15 @@ export class WeaponSystem {
       }
     }
 
-    // Fächerschuss / Burst-Warteschlange (gemeinsamer Mechanismus)
+    // Burst-Warteschlange
     if (this._shotQueueCount > 0) {
       const ammo = this.ammo[this.currentIndex];
       this._shotQueueTimer -= dt;
       if (this._shotQueueTimer <= 0) {
         if (ammo && ammo.mag > 0) {
-          this._fireOnce(ctx.bots, this._shotQueueSpread);
+          this._fireOnce(ctx.bots);
           this._shotQueueCount--;
-          this._shotQueueTimer = def.fanShotInterval ?? def.burstInterval ?? 0.06;
+          this._shotQueueTimer = def.burstInterval ?? 0.06;
         } else {
           this._shotQueueCount = 0;
         }
@@ -1062,10 +1085,13 @@ export class WeaponSystem {
     const recover = (def.spreadRecover || 0.15) * dt;
     this.currentSpread = Math.max(baseSpread, this.currentSpread - recover);
 
-    // Recoil-Erholung
+    // Recoil-Erholung (vertikal + horizontal)
     this.recoilPitchVel += -this.recoilPitch * 18 * dt;
     this.recoilPitchVel *= Math.max(0, 1 - 10 * dt);
     this.recoilPitch += this.recoilPitchVel * dt;
+    this.recoilYawVel += -this.recoilYaw * 16 * dt;
+    this.recoilYawVel *= Math.max(0, 1 - 9 * dt);
+    this.recoilYaw += this.recoilYawVel * dt;
 
     // View-Kick-Erholung
     this.viewKick.multiplyScalar(Math.max(0, 1 - 12 * dt));
@@ -1083,12 +1109,9 @@ export class WeaponSystem {
     if (this.meleeCooldown > 0) this.meleeCooldown = Math.max(0, this.meleeCooldown - dt);
     if (this.utilityCooldown > 0) this.utilityCooldown = Math.max(0, this.utilityCooldown - dt);
     if (this.meleeSwing > 0) this.meleeSwing = Math.max(0, this.meleeSwing - dt * 4);
-    if (this.fanShotCooldown > 0) this.fanShotCooldown = Math.max(0, this.fanShotCooldown - dt);
-    if (this.heavyCooldown > 0) this.heavyCooldown = Math.max(0, this.heavyCooldown - dt);
-    if (this.padCooldown > 0) this.padCooldown = Math.max(0, this.padCooldown - dt);
     if (this.switchAnim > 0) this.switchAnim = Math.max(0, this.switchAnim - dt * 5);
 
-    // Heilungs-Channel (Med-Kit)
+    // Heilungs-Channel (Heilkapsel)
     if (this.healTimer > 0) {
       this.healTimer -= dt;
       if (this.healTimer <= 0) {
@@ -1140,7 +1163,7 @@ export class WeaponSystem {
       for (const c of model.userData.cracks) {
         const pulse = 0.5 + 0.5 * Math.sin(this._crackTime * c.speed + c.phase);
         c.mesh.material.emissiveIntensity = 0.7 + pulse * 1.3;
-        c.mesh.material.opacity = 0.55 + pulse * 0.4;
+        if ("opacity" in c.mesh.material) c.mesh.material.opacity = 0.55 + pulse * 0.4;
       }
     }
 
@@ -1161,31 +1184,6 @@ export class WeaponSystem {
       if (p.fuse <= 0) {
         this._explode(p, ctx.player, ctx.bots);
         this.projectiles.splice(i, 1);
-      }
-    }
-
-    // Subspace-Pads
-    for (let i = this.pads.length - 1; i >= 0; i--) {
-      const pad = this.pads[i];
-      if (pad.armDelay > 0) pad.armDelay -= dt;
-      pad.life -= dt;
-      let triggered = false;
-      if (pad.armDelay <= 0 && ctx.player && ctx.player.alive) {
-        const dx = ctx.player.position.x - pad.mesh.position.x;
-        const dz = ctx.player.position.z - pad.mesh.position.z;
-        const dy = ctx.player.position.y - pad.mesh.position.y;
-        if (dx * dx + dz * dz < 0.85 * 0.85 && Math.abs(dy) < 1.2) {
-          ctx.player.applyImpulse({ x: 0, y: pad.launchForce, z: 0 });
-          triggered = true;
-        }
-      }
-      pad.mesh.rotation.y += dt * 1.5;
-      pad.mesh.position.y = 0.06 + Math.sin(performance.now() * 0.004) * 0.02;
-      if (triggered || pad.life <= 0) {
-        this.scene.remove(pad.mesh);
-        pad.mesh.geometry.dispose();
-        pad.mesh.material.dispose();
-        this.pads.splice(i, 1);
       }
     }
 

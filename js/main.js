@@ -1,5 +1,5 @@
-// main.js — Einstiegspunkt: Rendering-Setup, Input-Handling, Game-Loop, Rundensteuerung,
-// Menü-Navigation (Hauptmenü -> Loadout -> Modus/Map -> Match -> Rundenende -> Hauptmenü).
+// main.js — Einstiegspunkt: Rendering-Setup, Input-Handling, Game-Loop, Best-of-5-Rundensteuerung,
+// Menü-Navigation (Hauptmenü -> Loadout -> Modus/Map -> Match -> Rundenende/Matchende -> Hauptmenü).
 import * as THREE from "three";
 import { MAPS, buildMap, disposeMap, updateMapDecor } from "./maps.js";
 import { Player, MAX_HP as PLAYER_DEFAULT_MAX_HP } from "./player.js";
@@ -13,31 +13,20 @@ import { Effects } from "./effects.js";
 import * as Audio from "./audio.js";
 import { createPostFX } from "./postfx.js";
 
-const ROUND_DURATION = 90;
 const BASE_FOV = 78;
+const INTERMISSION_TIME = 3.2; // Sekunden zwischen zwei Runden (dient auch als Countdown)
 
 // --- Spielmodi -----------------------------------------------------------------------
+// Duell/Team-Gefecht/5v5-Variante sind strukturell identisch (Team BLAU inkl. Spieler
+// gegen Team ROT, Best-of-5-Eliminationsrunden) — nur allyCount/enemyCount unterscheiden sie.
 const MODES = [
-  { id: "duel", name: "Duell", description: "1v1 gegen einen Bot. Erster auf 5 Eliminationen gewinnt.", botCount: 1, winScore: 5 },
-  { id: "tdm", name: "Team-Deathmatch", description: "3v3: Du + 2 Bot-Verbündete gegen ein feindliches Bot-Team.", teams: true, allyCount: 2, enemyCount: 3, winScore: 30 },
-  { id: "training", name: "Training", description: "Kein Zeitlimit — in Ruhe üben. Mit M jederzeit verlassen.", botCount: 4, noTimer: true },
-  { id: "ffa", name: "Free-for-All", description: "Klassisches Free-for-All gegen 4 Bots, 90 Sekunden.", botCount: 4 },
-  { id: "gungame", name: "Gun Game", description: "Jede Elimination schaltet die nächste Waffe frei. Alle 4 durch = Sieg.", botCount: 4, lockWeaponProgression: true },
-  { id: "juggernaut", name: "Juggernaut", description: "400 HP, aber langsamer. Überlebe die Bot-Übermacht.", botCount: 4, playerMaxHp: 400, playerSpeedMult: 0.85 },
-  { id: "swift", name: "Swift Standoff", description: "1 HP für alle. Ein Treffer = eliminiert.", botCount: 4, playerMaxHp: 1, botMaxHp: 1 },
-  { id: "chicken", name: "Chicken Game", description: "Rotlicht/Grünlicht: bei Rot nicht bewegen oder schießen!", botCount: 4 },
+  { id: "duel", name: "Duell", description: "1v1 im Best-of-5. Erster auf 5 Rundensiege gewinnt.", roundBased: true, rankable: true, allyCount: 0, enemyCount: 1, bestOf: 5 },
+  { id: "team", name: "Team-Gefecht", description: "3v3 im Best-of-5: Du + 2 Verbündete gegen ein Bot-Team.", roundBased: true, rankable: true, allyCount: 2, enemyCount: 3, bestOf: 5 },
+  { id: "fivev5", name: "5v5-Variante", description: "5v5 im Best-of-5 — volle Teamstärke auf beiden Seiten.", roundBased: true, rankable: true, allyCount: 4, enemyCount: 5, bestOf: 5 },
+  { id: "training", name: "Training", description: "Kein Zeitlimit, keine Wertung — in Ruhe üben. Mit M jederzeit verlassen.", roundBased: false, rankable: false, botCount: 4 },
 ];
 
 const DIFFICULTIES = Object.entries(DIFFICULTY_PRESETS).map(([id, p]) => ({ id, name: p.name }));
-
-function randomRange(min, max) {
-  return min + Math.random() * (max - min);
-}
-
-/** true, wenn beim Chicken Game gerade Rotlicht ist (jede Aktion = sofortiges Aus). */
-function isChickenRedViolation() {
-  return roundActive && currentMode.id === "chicken" && chickenPhase === "red" && player.alive;
-}
 
 // --- Renderer / Szene / Kamera ---------------------------------------------------------
 const canvas = document.getElementById("game-canvas");
@@ -92,21 +81,25 @@ let weapons = null;
 
 let currentMapData = null;
 let bots = [];
-let botKillCounts = new Map();
-let score = { player: 0, bots: 0 };
-let roundTimeLeft = ROUND_DURATION;
-let roundActive = false;
-let deathRespawnTimer = 0;
+let botStats = new Map(); // id -> { name, team, kills, deaths }
+let playerStats = { kills: 0, deaths: 0 };
+let matchAccuracy = { shotsFired: 0, shotsHit: 0 };
+let roundScore = { blue: 0, red: 0 };
 let matchChallengeCompletions = [];
 let wasGrounded = true;
 let sprintDustTimer = 0;
 
-// Modus-Status
+// Modus-/Match-Status
 let currentMode = MODES[0];
 let currentDifficultyId = "normal";
-let gunGameStage = 0; // 0=Gewehr,1=Pistole,2=Messer,3=Utility -> entspricht SLOT-Werten
-let chickenPhase = "green";
-let chickenTimer = 0;
+let currentDifficultyObj = { id: "normal", name: "Normal" };
+let currentMapDef = null;
+let isRanked = false;
+let matchActive = false; // true zwischen Matchstart und Matchende (über alle Runden hinweg)
+let roundActive = false; // true nur während einer laufenden Eliminationsrunde
+let roundNumber = 0;
+let intermissionTimer = 0;
+let deathRespawnTimer = 0; // nur im Training genutzt
 
 function fireChallengeEvent(metric, amount = 1) {
   const completed = ChallengesModule.registerEvent(metric, amount);
@@ -117,7 +110,7 @@ function fireChallengeEvent(metric, amount = 1) {
 }
 
 // --- Input ---------------------------------------------------------------------------
-const keys = { forward: false, back: false, left: false, right: false, jump: false, sprint: false, slide: false };
+const keys = { forward: false, back: false, left: false, right: false, jump: false, sprint: false, slide: false, dash: false, scoreboard: false };
 
 const KEY_MAP = {
   KeyW: "forward",
@@ -130,15 +123,17 @@ const KEY_MAP = {
   ControlLeft: "slide",
   ControlRight: "slide",
   KeyC: "slide",
+  KeyQ: "dash",
+  Tab: "scoreboard",
 };
 
 window.addEventListener("keydown", (e) => {
   if (KEY_MAP[e.code]) {
     keys[KEY_MAP[e.code]] = true;
-    if (e.code === "Space") e.preventDefault();
+    if (e.code === "Space" || e.code === "Tab") e.preventDefault();
   }
-  if (e.code === "KeyM" && roundActive) {
-    endRound();
+  if (e.code === "KeyM" && matchActive) {
+    leaveMatch();
     return;
   }
   if (!roundActive || !player.alive) return;
@@ -147,13 +142,8 @@ window.addEventListener("keydown", (e) => {
   else if (e.code === "Digit3") trySwitchWeapon(() => weapons.switchTo(SLOT.MELEE));
   else if (e.code === "Digit4") trySwitchWeapon(() => weapons.switchTo(SLOT.UTILITY));
   else if (e.code === "KeyR") weapons.reload();
-  else if (e.code === "KeyF") {
-    if (isChickenRedViolation()) return killPlayerInstant("Vom Rotlicht erwischt!");
-    if (!currentMode.lockWeaponProgression || gunGameStage === SLOT.MELEE) weapons.meleeAttack(bots);
-  } else if (e.code === "KeyG") {
-    if (isChickenRedViolation()) return killPlayerInstant("Vom Rotlicht erwischt!");
-    if (!currentMode.lockWeaponProgression || gunGameStage === SLOT.UTILITY) weapons.throwUtility();
-  }
+  else if (e.code === "KeyF") weapons.meleeAttack(bots);
+  else if (e.code === "KeyG") weapons.throwUtility();
 });
 
 window.addEventListener("keyup", (e) => {
@@ -166,13 +156,9 @@ canvas.addEventListener("mousedown", (e) => {
     player.requestLock();
     return;
   }
-  if (!player.alive) return;
-  if (isChickenRedViolation()) return killPlayerInstant("Vom Rotlicht erwischt!");
+  if (!roundActive || !player.alive) return;
   if (e.button === 0) weapons.startFire();
-  else if (e.button === 2) {
-    if (weapons.currentIndex === SLOT.PRIMARY) weapons.setAiming(true);
-    else weapons.rightClickPress(bots);
-  }
+  else if (e.button === 2) weapons.setAiming(true);
 });
 window.addEventListener("mouseup", (e) => {
   if (!weapons) return; // Klicks in Menüs (vor Rundenstart) sollen hier keinen Fehler werfen
@@ -203,19 +189,9 @@ window.addEventListener(
 
 canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
-/**
- * Führt einen Waffenwechsel aus und triggert bei Erfolg die Triple-Jump-Tech: wechselt man in der Luft
- * auf eine leichte Waffe, gibt es einen Extra-Sprung — pro Waffe nur einmal pro Sprung.
- */
 function trySwitchWeapon(switchFn) {
-  if (currentMode.lockWeaponProgression) return;
   if (!switchFn()) return;
   Audio.playUiClick();
-  const def = weapons.currentDef();
-  if (def.grantsAirJump && !player.grounded && player.alive && player.canUseSwapJump(def.id)) {
-    player.grantExtraJump();
-    player.consumeSwapJump(def.id);
-  }
 }
 
 // --- Menü-Navigation -------------------------------------------------------------------
@@ -237,23 +213,29 @@ function goToModeSelect() {
   Audio.resumeAudio();
   UI.hideMainMenu();
   UI.hideLoadoutScreen();
-  UI.showModeSelectScreen(MAPS, MODES, DIFFICULTIES, startRound, goToMainMenu);
+  UI.showModeSelectScreen(MAPS, MODES, DIFFICULTIES, startMatch, goToMainMenu);
 }
 
-// --- Rundensteuerung -------------------------------------------------------------------
-function startRound(mapDef, modeDef, difficultyObj) {
+// --- Matchsteuerung (Best-of-5) ----------------------------------------------------------
+function startMatch(mapDef, modeDef, difficultyObj, ranked) {
   Audio.resumeAudio();
   if (currentMapData) {
     disposeMap(scene, currentMapData);
     disposeBots(scene, bots);
+    bots = [];
   }
 
   currentMode = modeDef;
+  currentMapDef = mapDef;
   currentDifficultyId = difficultyObj.id;
-  gunGameStage = 0;
-  chickenPhase = "green";
-  chickenTimer = randomRange(3, 5);
+  currentDifficultyObj = difficultyObj;
+  isRanked = !!ranked && !!modeDef.rankable;
   matchChallengeCompletions = [];
+  roundScore = { blue: 0, red: 0 };
+  roundNumber = 0;
+  playerStats = { kills: 0, deaths: 0 };
+  matchAccuracy = { shotsFired: 0, shotsHit: 0 };
+  botStats = new Map();
 
   currentMapData = buildMap(scene, mapDef);
 
@@ -266,33 +248,18 @@ function startRound(mapDef, modeDef, difficultyObj) {
   weapons.setWallMeshes(currentMapData.wallMeshes);
 
   player.team = TEAM.BLUE;
-  if (modeDef.teams) {
-    const allies = createBots(scene, modeDef.allyCount, currentMapData, TEAM.BLUE, currentDifficultyId, 0);
+  player.maxHp = PLAYER_DEFAULT_MAX_HP;
+
+  if (modeDef.roundBased) {
+    const allies = modeDef.allyCount > 0 ? createBots(scene, modeDef.allyCount, currentMapData, TEAM.BLUE, currentDifficultyId, 0) : [];
     const enemies = createBots(scene, modeDef.enemyCount, currentMapData, TEAM.RED, currentDifficultyId, modeDef.allyCount);
     bots = [...allies, ...enemies];
   } else {
     bots = createBots(scene, modeDef.botCount || 4, currentMapData, TEAM.RED, currentDifficultyId, 0);
   }
-  botKillCounts = new Map(bots.map((b) => [b.id, 0]));
-  if (modeDef.botMaxHp) {
-    for (const b of bots) {
-      b.maxHp = modeDef.botMaxHp;
-      b.hp = modeDef.botMaxHp;
-    }
-  }
+  for (const b of bots) botStats.set(b.id, { name: b.name, team: b.team, kills: 0, deaths: 0 });
 
-  player.maxHp = modeDef.playerMaxHp || PLAYER_DEFAULT_MAX_HP;
-  const spawn = currentMapData.spawnPoints[Math.floor(Math.random() * currentMapData.spawnPoints.length)];
-  player.spawn(spawn);
-  scene.add(player.hitMesh);
-  effects.clear();
-
-  score = { player: 0, bots: 0 };
-  roundTimeLeft = ROUND_DURATION;
-  roundActive = true;
-  deathRespawnTimer = 0;
-  wasGrounded = true;
-
+  matchActive = true;
   UI.hideMainMenu();
   UI.hideLoadoutScreen();
   UI.hideModeSelectScreen();
@@ -300,88 +267,126 @@ function startRound(mapDef, modeDef, difficultyObj) {
   UI.hideDeathScreen();
   UI.showHud();
   UI.setLeaveHintVisible(true);
-  UI.setChickenBanner(modeDef.id === "chicken", chickenPhase);
 
+  if (modeDef.roundBased) {
+    beginRoundIntermission("READY");
+  } else {
+    beginTrainingRound();
+  }
   player.requestLock();
 }
 
+function respawnAllForRound() {
+  const spawn = currentMapData.spawnPoints[Math.floor(Math.random() * currentMapData.spawnPoints.length)];
+  player.spawn(spawn);
+  scene.add(player.hitMesh);
+  for (const b of bots) b.respawnAt(true);
+  weapons.resetForRound();
+  effects.clear();
+  wasGrounded = true;
+}
+
+/** Startet die Intermission vor einer neuen Runde (dient gleichzeitig als Countdown). */
+function beginRoundIntermission(title) {
+  roundActive = false;
+  roundNumber += 1;
+  intermissionTimer = INTERMISSION_TIME;
+  respawnAllForRound();
+  UI.showRoundBanner(title, roundNumber, roundScore, currentMode.bestOf);
+}
+
+function beginTrainingRound() {
+  respawnAllForRound();
+  roundActive = true;
+  deathRespawnTimer = 0;
+}
+
 function getModeBannerText() {
-  switch (currentMode.id) {
-    case "gungame":
-      return `GUN GAME — Waffe ${gunGameStage + 1}/4`;
-    case "juggernaut":
-      return "JUGGERNAUT — überlebe die Bot-Übermacht";
-    case "swift":
-      return "SWIFT STANDOFF — 1 HP für alle";
-    case "duel":
-      return `DUELL — Erster auf ${currentMode.winScore}`;
-    case "tdm":
-      return "TEAM-DEATHMATCH";
-    case "training":
-      return "TRAINING — kein Zeitlimit";
-    default:
-      return null;
-  }
+  if (currentMode.id === "training") return "TRAINING — kein Zeitlimit";
+  return `${currentMode.name.toUpperCase()} — RUNDE ${roundNumber} · ${roundScore.blue}:${roundScore.red}`;
 }
 
-function checkWinCondition() {
-  if (!currentMode.winScore || !roundActive) return;
-  if (score.player >= currentMode.winScore) endRound("SIEG!");
-  else if (score.bots >= currentMode.winScore) endRound("NIEDERLAGE");
+/** Prüft, ob ein Team in der laufenden Runde vollständig eliminiert ist. */
+function checkRoundElimination() {
+  if (!roundActive || !currentMode.roundBased) return;
+  const blueAlive = player.alive || bots.some((b) => b.team === TEAM.BLUE && !b.dead);
+  const redAlive = bots.some((b) => b.team === TEAM.RED && !b.dead);
+  if (!redAlive) endRound(true);
+  else if (!blueAlive) endRound(false);
 }
 
-function endRound(title) {
+/** Rundenende (nur roundBased-Modi): erhöht den Rundenstand, prüft Matchende oder startet die nächste Intermission. */
+function endRound(blueWon) {
   roundActive = false;
   if (weapons) {
     weapons.stopFire();
     weapons.setAiming(false);
   }
+  if (blueWon) roundScore.blue += 1;
+  else roundScore.red += 1;
+  if (blueWon) fireChallengeEvent("roundWins");
+
+  const neededWins = Math.ceil(currentMode.bestOf / 2);
+  if (roundScore.blue >= neededWins || roundScore.red >= neededWins) {
+    endMatch(roundScore.blue > roundScore.red);
+  } else {
+    beginRoundIntermission(blueWon ? "RUNDE GEWONNEN" : "RUNDE VERLOREN");
+  }
+}
+
+/** Match-Ende (nur roundBased-Modi): Belohnungen, Rang-Update, vollständiger Ergebnis-Screen. */
+function endMatch(won) {
+  matchActive = false;
   if (document.pointerLockElement === canvas) document.exitPointerLock();
   UI.setLeaveHintVisible(false);
 
+  // Hinweis: der entscheidende Rundensieg selbst wurde bereits in endRound() als
+  // "roundWins" gezählt — hier nur noch das grundsätzliche "Match gespielt".
   fireChallengeEvent("matchesPlayed");
-  const won = score.player > score.bots;
-  if (won) fireChallengeEvent("roundWins");
 
-  const baseXp = 40 + score.player * 15;
-  const baseCurrency = 15 + score.player * 5;
-  const bonus = won ? { xp: 60, currency: 25 } : { xp: 0, currency: 0 };
+  const baseXp = 60 + roundScore.blue * 25;
+  const baseCurrency = 20 + roundScore.blue * 8;
+  const bonus = won ? { xp: 90, currency: 40 } : { xp: 0, currency: 0 };
   const rewardResult = Progression.grantRewards(baseXp + bonus.xp, baseCurrency + bonus.currency);
   if (rewardResult.leveledUp || rewardResult.newlyUnlocked.length) Audio.playReward();
 
-  const botStats = bots.map((b) => ({ name: b.name, kills: botKillCounts.get(b.id) || 0 }));
-  UI.showRoundEnd(
-    score.player,
-    score.bots,
-    botStats,
-    () => {
+  let rankResult = null;
+  if (isRanked) rankResult = Progression.applyRankedResult(won, currentDifficultyId, currentMode.name);
+
+  UI.showRoundEnd({
+    title: won ? "MATCH GEWONNEN!" : "MATCH VERLOREN",
+    isMatchEnd: true,
+    roundScore,
+    playerStats,
+    botStats: [...botStats.values()],
+    accuracy: matchAccuracy,
+    rewardResult,
+    rankResult,
+    completedChallenges: matchChallengeCompletions,
+    onRestart: () => {
       disposeMap(scene, currentMapData);
       disposeBots(scene, bots);
       currentMapData = null;
       bots = [];
       goToMainMenu();
     },
-    title,
-    rewardResult,
-    matchChallengeCompletions
-  );
+  });
 }
 
-/** Sofortiges Aus ohne Schadenswert (Chicken-Game-Regelverstoß). */
-function killPlayerInstant(reason) {
-  if (!player.alive) return;
-  UI.flashDamage();
-  postfx.pulseAberration(0.01);
-  Audio.playDeath();
-  player.hp = 0;
-  player.alive = false;
-  weapons.stopFire();
-  weapons.setAiming(false);
-  deathRespawnTimer = 3;
-  UI.showDeathScreen(reason);
-  score.bots += 1;
-  UI.addKillFeed(reason, true);
-  checkWinCondition();
+/** Verlässt ein laufendes Match jederzeit über M (zählt nicht als gewertetes Ergebnis). */
+function leaveMatch() {
+  matchActive = false;
+  roundActive = false;
+  if (weapons) {
+    weapons.stopFire();
+    weapons.setAiming(false);
+  }
+  if (document.pointerLockElement === canvas) document.exitPointerLock();
+  disposeMap(scene, currentMapData);
+  disposeBots(scene, bots);
+  currentMapData = null;
+  bots = [];
+  goToMainMenu();
 }
 
 function handlePlayerDamage(amount, attackerBot) {
@@ -392,17 +397,24 @@ function handlePlayerDamage(amount, attackerBot) {
     Audio.playDeath();
     weapons.stopFire();
     weapons.setAiming(false);
-    deathRespawnTimer = 3;
-    const label = attackerBot ? attackerBot.name : "deiner eigenen Wurfladung";
-    UI.showDeathScreen(label);
-    score.bots += 1;
+    playerStats.deaths += 1;
+
+    const label = attackerBot ? attackerBot.name : "einer Explosion";
     if (attackerBot) {
-      botKillCounts.set(attackerBot.id, (botKillCounts.get(attackerBot.id) || 0) + 1);
+      const st = botStats.get(attackerBot.id);
+      if (st) st.kills += 1;
       UI.addKillFeed(`${attackerBot.name} hat dich eliminiert`, true);
     } else {
-      UI.addKillFeed(`Du wurdest von deiner eigenen Wurfladung eliminiert`, true);
+      UI.addKillFeed(`Du wurdest eliminiert`, true);
     }
-    checkWinCondition();
+
+    if (currentMode.roundBased) {
+      UI.showDeathScreen(label, true);
+      checkRoundElimination();
+    } else {
+      deathRespawnTimer = 3;
+      UI.showDeathScreen(label, false);
+    }
   }
 }
 
@@ -413,154 +425,147 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(0.05, clock.getDelta());
 
-  if (roundActive) {
-    if (player.alive) {
-      const recoilPitch = weapons.getRecoilPitch();
-      const speedMult = weapons.getMoveSpeedMultiplier() * (currentMode.playerSpeedMult || 1);
-      const wasJumping = keys.jump && player.grounded;
-      player.update(dt, keys, currentMapData.wallBoxes, currentMapData.bounds, recoilPitch, speedMult);
-      if (wasJumping && !player.grounded) Audio.playJump();
-
-      // Lande-/Sprintstaub (rein optisches Feedback)
-      if (!wasGrounded && player.grounded) {
-        effects.burstDust(player.position, 9, 0.4, 1.8);
-        Audio.playLand();
-      }
-      wasGrounded = player.grounded;
-      if (player.isSprinting && player.grounded) {
-        sprintDustTimer -= dt;
-        if (sprintDustTimer <= 0) {
-          effects.footDust(new THREE.Vector3(player.position.x, player.position.y + 0.05, player.position.z));
-          sprintDustTimer = 0.14;
+  if (matchActive) {
+    if (roundActive) {
+      if (player.alive) {
+        const recoilPitch = weapons.getRecoilPitch();
+        const recoilYaw = weapons.getRecoilYaw();
+        const speedMult = weapons.getMoveSpeedMultiplier();
+        const wasJumping = keys.jump && player.grounded;
+        player.update(dt, keys, currentMapData.wallBoxes, currentMapData.bounds, recoilPitch, speedMult, recoilYaw);
+        if (wasJumping && !player.grounded) Audio.playJump();
+        if (player.dashJustStarted) {
+          Audio.playDash();
+          effects.burstDust(player.position, 7, 0.3, 1.4);
+          postfx.pulseAberration(0.004);
         }
-      }
-    }
 
-    const moveState = { isMoving: player.isMoving, isSprinting: player.isSprinting, grounded: player.grounded };
-    weapons.update(dt, moveState, { bots, player });
-    effects.update(dt);
-    updateMapDecor(currentMapData, dt);
-
-    // ADS-Zoom sanft auf die Kamera anwenden
-    const aimT = weapons.getAimProgress();
-    const targetFov = THREE.MathUtils.lerp(BASE_FOV, weapons.getAdsFov(), aimT);
-    if (Math.abs(camera.fov - targetFov) > 0.01) {
-      camera.fov = targetFov;
-      camera.updateProjectionMatrix();
-    }
-
-    for (const ev of weapons.drainEvents()) {
-      if (ev.type === "explosionDamagePlayer") {
-        if (ev.knockback) player.applyImpulse(ev.knockback);
-        postfx.shakeCamera(0.03, 0.3);
-        if (ev.damage > 0) handlePlayerDamage(ev.damage, null);
-        continue;
-      }
-      if (ev.type === "healPlayer") {
-        player.hp = Math.min(player.maxHp, player.hp + ev.amount);
-        Audio.playReward();
-        continue;
-      }
-      if (ev.hit) {
-        UI.showHitmarker(ev.isHead);
-        if (ev.isHead) Audio.playHeadshot();
-        else Audio.playHitmarker();
-        if (ev.isExplosion) postfx.shakeCamera(0.02, 0.2);
-        if (ev.isMelee) postfx.shakeCamera(0.012, 0.12);
-
-        if (ev.killed) {
-          score.player += 1;
-          const how = ev.isBackstab ? " (Backstab)" : ev.isExplosion ? " (Wurfladung)" : ev.isHead ? " (Kopfschuss)" : "";
-          UI.addKillFeed(`Du hast ${ev.bot.name} eliminiert${how}`, false);
-
-          fireChallengeEvent("eliminations");
-          if (ev.isHead) fireChallengeEvent("headshots");
-          if (ev.isBackstab) fireChallengeEvent("backstabs");
-          if (ev.isExplosion) fireChallengeEvent("utilityKills");
-          if (ev.isMelee) fireChallengeEvent("meleeKills");
-
-          if (currentMode.id === "gungame") {
-            gunGameStage += 1;
-            if (gunGameStage >= 4) {
-              endRound("GUN GAME GEWONNEN!");
-            } else {
-              weapons.switchTo(gunGameStage);
-            }
+        // Lande-/Sprintstaub (rein optisches Feedback)
+        if (!wasGrounded && player.grounded) {
+          effects.burstDust(player.position, 9, 0.4, 1.8);
+          Audio.playLand();
+        }
+        wasGrounded = player.grounded;
+        if (player.isSprinting && player.grounded) {
+          sprintDustTimer -= dt;
+          if (sprintDustTimer <= 0) {
+            effects.footDust(new THREE.Vector3(player.position.x, player.position.y + 0.05, player.position.z));
+            sprintDustTimer = 0.14;
           }
-          checkWinCondition();
         }
       }
-    }
 
-    // Chicken Game: Rotlicht/Grünlicht
-    if (currentMode.id === "chicken" && player.alive) {
-      chickenTimer -= dt;
-      if (chickenTimer <= 0) {
-        chickenPhase = chickenPhase === "green" ? "red" : "green";
-        chickenTimer = chickenPhase === "red" ? randomRange(2, 4) : randomRange(3, 5);
-      }
-      UI.setChickenBanner(true, chickenPhase);
-      if (chickenPhase === "red") {
-        const moving = keys.forward || keys.back || keys.left || keys.right || keys.jump || keys.slide;
-        if (moving || weapons.triggerHeld || weapons.aiming) killPlayerInstant("Vom Rotlicht erwischt!");
-      }
-    }
-    const botsFrozen = currentMode.id === "chicken" && chickenPhase === "red";
+      const moveState = { isMoving: player.isMoving, isSprinting: player.isSprinting, grounded: player.grounded };
+      weapons.update(dt, moveState, { bots, player });
+      effects.update(dt);
+      updateMapDecor(currentMapData, dt);
 
-    // Bots aktualisieren (Team-Kämpfe inkl. Bot-vs-Bot, Rauch blockiert Sicht)
-    if (!botsFrozen && roundActive) {
+      // ADS-Zoom sanft auf die Kamera anwenden
+      const aimT = weapons.getAimProgress();
+      const targetFov = THREE.MathUtils.lerp(BASE_FOV, weapons.getAdsFov(), aimT);
+      if (Math.abs(camera.fov - targetFov) > 0.01) {
+        camera.fov = targetFov;
+        camera.updateProjectionMatrix();
+      }
+
+      for (const ev of weapons.drainEvents()) {
+        if (ev.type === "shotFired") {
+          matchAccuracy.shotsFired += 1;
+          continue;
+        }
+        if (ev.type === "explosionDamagePlayer") {
+          if (ev.knockback) player.applyImpulse(ev.knockback);
+          postfx.shakeCamera(0.03, 0.3);
+          if (ev.damage > 0) handlePlayerDamage(ev.damage, null);
+          continue;
+        }
+        if (ev.type === "healPlayer") {
+          player.hp = Math.min(player.maxHp, player.hp + ev.amount);
+          Audio.playReward();
+          continue;
+        }
+        if (ev.hit) {
+          matchAccuracy.shotsHit += 1;
+          UI.showHitmarker(ev.isHead);
+          if (ev.isHead) Audio.playHeadshot();
+          else Audio.playHitmarker();
+          if (ev.isExplosion) postfx.shakeCamera(0.02, 0.2);
+          if (ev.isMelee) postfx.shakeCamera(0.012, 0.12);
+
+          if (ev.killed) {
+            playerStats.kills += 1;
+            const st = botStats.get(ev.bot.id);
+            if (st) st.deaths += 1;
+            const how = ev.isBackstab ? " (Backstab)" : ev.isExplosion ? " (Wurfladung)" : ev.isHead ? " (Kopfschuss)" : "";
+            UI.addKillFeed(`Du hast ${ev.bot.name} eliminiert${how}`, false);
+
+            fireChallengeEvent("eliminations");
+            if (ev.isHead) fireChallengeEvent("headshots");
+            if (ev.isBackstab) fireChallengeEvent("backstabs");
+            if (ev.isExplosion) fireChallengeEvent("utilityKills");
+            if (ev.isMelee) fireChallengeEvent("meleeKills");
+
+            checkRoundElimination();
+          }
+        }
+      }
+
+      // Bots aktualisieren (Team-Kämpfe inkl. Bot-vs-Bot, Rauch blockiert Sicht).
+      // In Runden-Modi ohne Mid-Round-Respawn: tote Bots bleiben bis zur nächsten Runde tot.
       const smokeVolumes = weapons.getSmokeVolumes();
+      const allowRespawn = !currentMode.roundBased;
       for (const bot of bots) {
-        const botEvents = bot.update(dt, player, bots, currentMapData.wallBoxes, currentMapData.wallMeshes, currentMapData.bounds, smokeVolumes);
+        const botEvents = bot.update(dt, player, bots, currentMapData.wallBoxes, currentMapData.wallMeshes, currentMapData.bounds, smokeVolumes, allowRespawn);
         for (const ev of botEvents) {
           if (ev.type === "hitPlayer") {
             handlePlayerDamage(ev.amount, bot);
           } else if (ev.type === "hitBot" && ev.killed) {
             const killerIsBlue = bot.team === TEAM.BLUE;
-            if (killerIsBlue) score.player += 1;
-            else score.bots += 1;
-            botKillCounts.set(bot.id, (botKillCounts.get(bot.id) || 0) + 1);
+            const killerSt = botStats.get(bot.id);
+            const victimSt = botStats.get(ev.target.id);
+            if (killerSt) killerSt.kills += 1;
+            if (victimSt) victimSt.deaths += 1;
             UI.addKillFeed(`${bot.name} hat ${ev.target.name} eliminiert`, !killerIsBlue);
             if (killerIsBlue && ev.assistTag === "player") fireChallengeEvent("assists");
-            checkWinCondition();
+            checkRoundElimination();
           }
         }
       }
-    }
 
-    // Spieler-Respawn
-    if (!player.alive && roundActive) {
-      deathRespawnTimer -= dt;
-      UI.updateRespawnCountdown(deathRespawnTimer);
-      if (deathRespawnTimer <= 0) {
-        const spawn = currentMapData.spawnPoints[Math.floor(Math.random() * currentMapData.spawnPoints.length)];
-        player.spawn(spawn);
-        Audio.playRespawn();
-        UI.hideDeathScreen();
+      // Spieler-Respawn nur im Training (Runden-Modi: Spieler bleibt bis Rundenende tot)
+      if (!currentMode.roundBased && !player.alive) {
+        deathRespawnTimer -= dt;
+        UI.updateRespawnCountdown(deathRespawnTimer);
+        if (deathRespawnTimer <= 0) {
+          const spawn = currentMapData.spawnPoints[Math.floor(Math.random() * currentMapData.spawnPoints.length)];
+          player.spawn(spawn);
+          Audio.playRespawn();
+          UI.hideDeathScreen();
+        }
       }
-    }
 
-    // Rundentimer
-    if (roundActive && !currentMode.noTimer) {
-      roundTimeLeft -= dt;
-      if (roundTimeLeft <= 0) {
-        roundTimeLeft = 0;
-        endRound();
-      }
-    }
-
-    if (roundActive) {
       // HUD synchronisieren
       const hud = weapons.getHUDState();
       UI.setHealth(player.hp, player.maxHp);
       UI.setAmmo(hud);
       UI.setCooldowns(hud.meleeCooldownPct, hud.utilityCooldownPct);
+      UI.setDashCooldown(player.getDashCooldownPct());
       UI.setAiming(hud.aiming);
       UI.setCrosshairSpread(hud.spread);
       UI.setModeBanner(getModeBannerText());
-      UI.setTimer(roundTimeLeft, currentMode.noTimer);
-      UI.setScore(score.player, score.bots);
+      UI.setRoundPips(currentMode.roundBased ? roundScore : null, currentMode.bestOf);
       UI.setLockHintVisible(!player.isLocked);
+      UI.setScoreboardVisible(!!keys.scoreboard, player, playerStats, botStats);
+    } else if (currentMode.roundBased) {
+      // Intermission zwischen zwei Runden (dient als Countdown)
+      intermissionTimer -= dt;
+      UI.updateRoundBannerCountdown(Math.max(0, intermissionTimer));
+      if (intermissionTimer <= 0) {
+        roundActive = true;
+        UI.hideRoundBanner();
+      }
+      effects.update(dt);
+      updateMapDecor(currentMapData, dt);
     }
   }
 

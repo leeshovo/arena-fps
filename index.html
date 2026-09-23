@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ARENA FPS — Three.js Prototype</title>
+<title>KINETIC BREACH</title>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -13,8 +13,8 @@
   <!-- ============ HAUPTMENÜ ============ -->
   <div id="main-menu" class="overlay">
     <div class="menu-box wide">
-      <h1>ARENA <span class="accent">FPS</span></h1>
-      <p class="subtitle">Schnelles Low-Poly Arcade-Shooting</p>
+      <h1>KINETIC <span class="accent">BREACH</span></h1>
+      <p class="subtitle">Taktisches Low-Poly Arena-Duell — Best-of-5</p>
 
       <div id="player-summary">
         <div id="player-level-badge">Lvl <span id="player-level">1</span></div>
@@ -25,8 +25,21 @@
         <div id="currency-display"><span class="coin-icon">◆</span><span id="currency-amount">150</span></div>
       </div>
 
-      <div class="section-label">Aktuelle Challenges</div>
-      <div id="challenges-list" class="challenges-list"></div>
+      <div id="rank-badge">
+        <div id="rank-name">Rekrut</div>
+        <div id="rank-sr">0 SR</div>
+      </div>
+
+      <div class="menu-columns">
+        <div class="menu-col">
+          <div class="section-label">Aktuelle Aufträge</div>
+          <div id="challenges-list" class="challenges-list"></div>
+        </div>
+        <div class="menu-col">
+          <div class="section-label">Bestenliste (gewertet)</div>
+          <div id="leaderboard-list" class="leaderboard-list"></div>
+        </div>
+      </div>
 
       <div id="mobile-notice" class="hidden">
         Dieses Spiel braucht Maus &amp; Tastatur (Pointer Lock) und läuft nicht auf dem Handy/Tablet —
@@ -37,8 +50,8 @@
         <button id="open-loadout-btn" class="menu-btn">Loadout</button>
         <button id="open-play-btn" class="menu-btn primary">Spielen</button>
       </div>
-      <p class="hint">WASD Bewegen · Maus Umsehen · Leertaste Springen · Shift Sprint · Strg/C Slide<br/>
-      LMB Schießen · 1-4/Mausrad Waffenwechsel · R Nachladen · F Nahkampf · G Utility · M Match verlassen</p>
+      <p class="hint">WASD Bewegen · Maus Umsehen · Leertaste Springen (2×) · Shift Sprint · Strg/C Slide · Q Dash<br/>
+      LMB Schießen · RMB Zielen · 1-4/Mausrad Waffenwechsel · R Nachladen · F Nahkampf · G Utility · Tab Scoreboard · M Match verlassen</p>
     </div>
   </div>
 
@@ -63,6 +76,12 @@
       <div id="mode-list" class="mode-list"></div>
       <div class="section-label">Schwierigkeit</div>
       <div id="difficulty-list" class="mode-list difficulty-list"></div>
+      <div id="ranked-toggle-wrap" class="hidden">
+        <label id="ranked-toggle-label">
+          <input type="checkbox" id="ranked-toggle" />
+          Gewertet spielen (beeinflusst deinen Rang/SR)
+        </label>
+      </div>
       <div class="section-label">Map</div>
       <div id="map-list" class="map-list"></div>
       <button id="mode-select-back-btn" class="menu-btn">Zurück zum Hauptmenü</button>
@@ -81,16 +100,21 @@
 
     <div id="top-bar">
       <div id="mode-banner" class="hidden"></div>
-      <div id="timer">01:30</div>
-      <div id="score"><span id="score-player">0</span> <span class="score-label">DU</span> &nbsp;—&nbsp; <span class="score-label">BOTS</span> <span id="score-bots">0</span></div>
+      <div id="round-pips" class="hidden"></div>
     </div>
 
-    <div id="chicken-banner" class="hidden">
-      <div id="chicken-phase-text">GRÜN</div>
-      <div id="chicken-sub">Bei Rot: nicht bewegen oder schießen!</div>
+    <div id="round-banner" class="hidden">
+      <div id="round-banner-title">RUNDE 1</div>
+      <div id="round-banner-score">Stand 0 : 0</div>
+      <div id="round-banner-countdown">Nächste Runde in 3…</div>
     </div>
 
-    <div id="leave-hint" class="hidden">M — Match verlassen</div>
+    <div id="scoreboard-overlay" class="hidden">
+      <div class="sb-team" id="scoreboard-blue"></div>
+      <div class="sb-team" id="scoreboard-red"></div>
+    </div>
+
+    <div id="leave-hint" class="hidden">M — Match verlassen · Tab — Scoreboard</div>
 
     <div id="killfeed"></div>
 
@@ -118,6 +142,7 @@
     <div id="key-hints">
       <div class="hint-item"><span class="key">F</span> Nahkampf <span id="melee-cd" class="cd-bar"><span class="cd-fill"></span></span></div>
       <div class="hint-item"><span class="key">G</span> Utility <span id="utility-cd" class="cd-bar"><span class="cd-fill"></span></span></div>
+      <div class="hint-item"><span class="key">Q</span> Dash <span id="dash-cd" class="cd-bar"><span class="cd-fill"></span></span></div>
     </div>
 
     <div id="damage-vignette"></div>
@@ -127,20 +152,21 @@
   <!-- ============ DEATH SCREEN ============ -->
   <div id="death-screen" class="overlay hidden">
     <div class="menu-box small">
-      <h2>ELIMINIERT</h2>
+      <h2 id="death-title">ELIMINIERT</h2>
       <div id="killed-by"></div>
       <div id="respawn-timer">Respawn in 3…</div>
     </div>
   </div>
 
-  <!-- ============ ROUND END SCREEN ============ -->
+  <!-- ============ ROUND END / MATCH END SCREEN ============ -->
   <div id="round-end-screen" class="overlay hidden">
     <div class="menu-box">
-      <h2 id="round-end-title">RUNDE BEENDET</h2>
+      <h2 id="round-end-title">MATCH BEENDET</h2>
       <div id="scoreboard"></div>
       <div id="reward-summary">
         <div id="reward-row"><span id="reward-xp">+0 XP</span><span id="reward-currency">+0 ◆</span></div>
         <div id="reward-levelup" class="hidden">LEVEL UP! Level <span id="reward-new-level"></span></div>
+        <div id="reward-rank" class="hidden"></div>
       </div>
       <div id="reward-unlocks"></div>
       <div id="reward-challenges"></div>
